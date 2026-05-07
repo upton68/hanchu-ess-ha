@@ -1253,8 +1253,8 @@ class HanchuessEnergyCard extends HTMLElement {
       : [[iv.start, 1439], [0, iv.end]];
     for (const ra of ranges(a)) {
       for (const rb of ranges(b)) {
-        // Overlap: not (ra ends before rb starts, or rb ends before ra starts)
-        if (ra[0] <= rb[1] && rb[0] <= ra[1]) return true;
+        // Overlap: intervals cross only if one starts strictly before the other ends
+        if (ra[0] < rb[1] && rb[0] < ra[1]) return true;
       }
     }
     return false;
