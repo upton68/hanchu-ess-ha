@@ -2,5 +2,5 @@
 import os
 
 DOMAIN = "hanchuess"
-PLATFORMS = ["sensor", "number", "switch", "select"]
+PLATFORMS = ["sensor", "number", "switch", "select", "time"]
 BASE_URL = os.environ.get("HANCHUESS_URL", "https://iess3.hanchuess.com")
