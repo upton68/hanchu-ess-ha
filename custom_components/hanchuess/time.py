@@ -111,8 +111,8 @@ class HanchuessTimeSlot(TimeEntity):
 
     async def async_set_value(self, value: time) -> None:
         """Send time slot change to device."""
-        # Format as HH:MM string as expected by the API
-        time_str = value.strftime("%H:%M")
+        # convert to seconds since midnight
+        seconds = (value.hour * 3600) + (value.minute * 60)
         result = await self._client.async_device_control(
             self._entry.data["sn"],
             "2",
