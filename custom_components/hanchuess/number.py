@@ -102,7 +102,7 @@ class HanchuessNumber(NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         result = await self._client.async_device_control(
             self._entry.data["sn"],
-            "inverter",
+            "2",
             {self._config["control_key"]: int(value)},
         )
         if result.get("success"):
