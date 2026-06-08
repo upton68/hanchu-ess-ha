@@ -1,50 +1,59 @@
 """Number platform for Hanchuess."""
 import logging
-from homeassistant.components.number import NumberEntity
+from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.const import UnitOfPower, PERCENTAGE
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity import DeviceInfo
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-
-def _is_device_online(coordinator) -> bool:
-    dev_status = coordinator.data.get("devStatus")
-    try:
-        return int(dev_status) == 1
-    except (ValueError, TypeError):
-        return False
-
 NUMBERS = {
     "charge_power_limit": {
-        "key": "chargePowerLimit",
-        "min_key": "chargeMinPower",
-        "max_key": "chargeMaxPower",
-        "control_key": "CHARGE_POWER_LIMIT",
+        "name": "Charge Power Limit",
+        "control_key": "CHG_PWR_LMT",
         "unit": UnitOfPower.WATT,
         "icon": "mdi:battery-charging",
+        "min": 0,
+        "max": 5000,
         "step": 100,
     },
     "discharge_power_limit": {
-        "key": "dischargePowerLimit",
-        "min_key": "dischargeMinPower",
-        "max_key": "dischargeMaxPower",
-        "control_key": "DISCHARGE_POWER_LIMIT",
+        "name": "Discharge Power Limit",
+        "control_key": "DSCHG_PWR_LMT",
         "unit": UnitOfPower.WATT,
         "icon": "mdi:battery-arrow-down",
+        "min": 0,
+        "max": 5000,
         "step": 100,
     },
-    "soc_min": {
-        "key": "socMin",
-        "min_key": "socMinLimit",
-        "max_key": "socMaxLimit",
-        "control_key": "SOC_MIN",
+    "max_charge_soc": {
+        "name": "Maximum Charge SOC",
+        "control_key": "CHG_BAT_SOC_LMT",
+        "unit": PERCENTAGE,
+        "icon": "mdi:battery-high",
+        "min": 50,
+        "max": 100,
+        "step": 1,
+    },
+    "min_discharge_soc": {
+        "name": "Minimum Discharge SOC",
+        "control_key": "DSCHG_BAT_SOC_LMT",
         "unit": PERCENTAGE,
         "icon": "mdi:battery-low",
+        "min": 5,
+        "max": 45,
+        "step": 1,
+    },
+    "grid_charge_soc_limit": {
+        "name": "Grid to Battery Charge Maximum",
+        "control_key": "DTU_AC_CHG_SOC_LMT",
+        "unit": PERCENTAGE,
+        "icon": "mdi:transmission-tower",
+        "min": 20,
+        "max": 100,
         "step": 1,
     },
 }
@@ -53,58 +62,54 @@ NUMBERS = {
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ):
-    coordinators = hass.data[DOMAIN][entry.entry_id]
-    coordinator = coordinators["realtime"]
-    entities = []
-    for number_key, config in NUMBERS.items():
-        if config["key"] in coordinator.data:
-            entities.append(HanchueNumber(coordinator, entry, number_key, config))
+    data = hass.data[DOMAIN][entry.entry_id]
+    client = data["realtime"].client
+    entities = [
+        HanchuessNumber(client, entry, number_key, config)
+        for number_key, config in NUMBERS.items()
+    ]
     async_add_entities(entities)
 
 
-class HanchueNumber(CoordinatorEntity, NumberEntity):
-    _attr_has_entity_name = True
+class HanchuessNumber(NumberEntity):
+    """Represents a numeric control for Hanchuess."""
 
-    def __init__(self, coordinator, entry, number_key, config):
-        super().__init__(coordinator)
+    _attr_has_entity_name = True
+    _attr_mode = NumberMode.BOX
+
+    def __init__(self, client, entry, number_key, config):
+        self._client = client
         self._entry = entry
         self._config = config
-        self._attr_translation_key = number_key
+        self._attr_name = config["name"]
         self._attr_unique_id = f"{entry.data['sn']}_{number_key}"
-        self._attr_icon = config.get("icon")
-        self._attr_native_unit_of_measurement = config.get("unit")
-        self._attr_native_step = config.get("step", 1)
+        self._attr_icon = config["icon"]
+        self._attr_native_unit_of_measurement = config["unit"]
+        self._attr_native_min_value = config["min"]
+        self._attr_native_max_value = config["max"]
+        self._attr_native_step = config["step"]
+        self._attr_native_value = None
 
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
             identifiers={(DOMAIN, self._entry.data["sn"])},
             name=f"Hanchuess {self._entry.data['sn']}",
-            manufacturer="Hanchuess",
+            manufacturer="Hanchu",
             model="ESS Device",
         )
 
-    @property
-    def available(self) -> bool:
-        return super().available and _is_device_online(self.coordinator)
-
-    @property
-    def native_min_value(self) -> float:
-        return self.coordinator.data.get(self._config["min_key"], 0)
-
-    @property
-    def native_max_value(self) -> float:
-        return self.coordinator.data.get(self._config["max_key"], 100)
-
-    @property
-    def native_value(self) -> float | None:
-        return self.coordinator.data.get(self._config["key"])
-
     async def async_set_native_value(self, value: float) -> None:
-        result = await self.coordinator.client.async_device_control(
+        result = await self._client.async_device_control(
             self._entry.data["sn"],
-            self._entry.data.get("dev_type", "2"),
-            {self._config["control_key"]: str(int(value))},
+            "inverter",
+            {self._config["control_key"]: int(value)},
         )
         if result.get("success"):
-            await self.coordinator.async_request_refresh()
+            self._attr_native_value = value
+            self.async_write_ha_state()
+            _LOGGER.info("%s set to %s", self._config["name"], value)
+        else:
+            _LOGGER.error(
+                "Failed to set %s: %s", self._config["name"], result.get("msg")
+            )
