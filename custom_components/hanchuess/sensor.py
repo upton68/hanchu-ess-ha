@@ -31,7 +31,7 @@ SENSORS = {
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfPower.WATT,
         "icon": "mdi:battery-charging",
-        "scale": 1000,
+        "auto_watt": True,
     },
     "pv_power": {
         "key": "pvTtPwr",
@@ -39,7 +39,7 @@ SENSORS = {
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfPower.WATT,
         "icon": "mdi:solar-power",
-        "scale": 1000,
+        "auto_watt": True,
     },
     "grid_power": {
         "key": "meterPPwr",
@@ -47,7 +47,7 @@ SENSORS = {
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfPower.WATT,
         "icon": "mdi:transmission-tower",
-        "scale": 1000,
+        "auto_watt": True,
     },
     "load_power": {
         "key": "loadPwr",
@@ -55,6 +55,7 @@ SENSORS = {
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfPower.WATT,
         "icon": "mdi:home-lightning-bolt",
+        "auto_watt": True,
     },
     "dg_power": {
         "key": "dgPAcTotal",
@@ -62,7 +63,7 @@ SENSORS = {
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfPower.WATT,
         "icon": "mdi:engine",
-        "scale": 1000,
+        "auto_watt": True,
         "condition_key": "hasDg",
         "condition_value": True,
     },
@@ -241,16 +242,13 @@ async def async_setup_entry(
     realtime = data["realtime"]
     statistics = data["statistics"]
     entities = []
-    # Device status sensor with card attributes
     entities.append(DeviceStatusSensor(realtime, entry))
-    # Other realtime sensors
     for sensor_key, config in SENSORS.items():
         cond_key = config.get("condition_key")
         if cond_key:
             if realtime.data.get(cond_key) != config.get("condition_value"):
                 continue
         entities.append(HanchueSensor(realtime, entry, sensor_key, config))
-    # Statistics sensors
     for sensor_key, config in STATISTICS_SENSORS.items():
         cond_key = config.get("condition_key")
         if cond_key:
@@ -292,6 +290,16 @@ class HanchueSensor(CoordinatorEntity, SensorEntity):
         value = self.coordinator.data.get(self._config["key"])
         if value is None:
             return None
+        if self._config.get("auto_watt"):
+            try:
+                v = float(value)
+                # API returns watts below 1000, kW at 1000 and above
+                if abs(v) < 1000:
+                    return round(v, 1)
+                else:
+                    return round(v * 1000, 1)
+            except (ValueError, TypeError):
+                return None
         if "scale" in self._config:
             try:
                 return round(float(value) * self._config["scale"], 1)
