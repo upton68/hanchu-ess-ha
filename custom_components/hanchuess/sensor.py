@@ -55,7 +55,6 @@ SENSORS = {
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfPower.WATT,
         "icon": "mdi:home-lightning-bolt",
-        "scale": 1000,
     },
     "dg_power": {
         "key": "dgPAcTotal",
