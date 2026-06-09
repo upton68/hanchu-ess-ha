@@ -99,6 +99,22 @@ class HanchuessNumber(NumberEntity):
             model="ESS Device",
         )
 
+    async def async_added_to_hass(self) -> None:
+        """Read current value from device on startup."""
+        try:
+            result = await self._client.async_iot_get(
+                self._entry.data["sn"],
+                "2",
+                [self._config["control_key"]],
+            )
+            value = result.get(self._config["control_key"])
+            if value is not None:
+                self._attr_native_value = float(value)
+                self.async_write_ha_state()
+                _LOGGER.info("%s initialised to %s", self._config["name"], value)
+        except Exception as err:
+            _LOGGER.warning("Could not read initial value for %s: %s", self._config["name"], err)
+
     async def async_set_native_value(self, value: float) -> None:
         result = await self._client.async_device_control(
             self._entry.data["sn"],
