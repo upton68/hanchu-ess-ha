@@ -184,6 +184,7 @@ actions:
       time: "00:00:00"
 ```
 Replace YOURSERIAL with your device serial number throughout.
+
 Known Limitations
 Battery unit sensors (individual pack SOC, SOH, temperature, voltage) are not yet implemented — these require a separate API endpoint
 The Hanchu API returns mixed units for power sensors (watts below 1kW, kilowatts above) — the integration handles this automatically
