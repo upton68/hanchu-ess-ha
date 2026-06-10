@@ -193,3 +193,18 @@ Token refresh is handled automatically every 25 days
 Credits
 Based on the original work by guoxiatech.
 API reverse engineering and extended entity support by upton68.
+
+Custom Lovelace Card
+The integration auto-registers a custom card Hanchuess Remote Settings which can be found under Custom cards when adding a card to your dashboard.
+
+Custom Card
+
+The card provides:
+
+SN display at the top
+Fast Charge/Discharge — Select mode (charge/discharge), set duration, confirm or stop with real-time countdown
+Energy Settings — Load and configure work mode, charge/discharge time periods, SOC limits, and other parameters from the device menu
+Note: If you cannot find the Hanchuess card when adding to dashboard, please clear your browser cache and refresh the page, or restart Home Assistant.
+
+License
+MIT License
