@@ -111,7 +111,7 @@ discharge_stop_service:
     entity_id: input_boolean.predbat_discharge_start
 ```
 
-Predbat bridge automations
+## Predbat bridge automations
 Predbat controls charge/discharge by setting time slots. Add these automations to wire Predbat to the integration:
 
 ```
@@ -185,19 +185,19 @@ actions:
 ```
 Replace YOURSERIAL with your device serial number throughout.
 
-Known Limitations
+## Known Limitations
 
 Battery unit sensors (individual pack SOC, SOH, temperature, voltage) are not yet implemented — these require a separate API endpoint
 The Hanchu API returns mixed units for power sensors (watts below 1kW, kilowatts above) — the integration handles this automatically
 Token refresh is handled automatically every 25 days
-Credits
+## Credits
 Based on the original work by guoxiatech.
 API reverse engineering and extended entity support by upton68.
 
-Custom Lovelace Card
+## Custom Lovelace Card
 The integration auto-registers a custom card Hanchuess Remote Settings which can be found under Custom cards when adding a card to your dashboard.
 
-Custom Card
+## Custom Card
 
 The card provides:
 
@@ -206,5 +206,5 @@ Fast Charge/Discharge — Select mode (charge/discharge), set duration, confirm 
 Energy Settings — Load and configure work mode, charge/discharge time periods, SOC limits, and other parameters from the device menu
 Note: If you cannot find the Hanchuess card when adding to dashboard, please clear your browser cache and refresh the page, or restart Home Assistant.
 
-License
+## License
 MIT License
