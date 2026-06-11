@@ -178,6 +178,49 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     stats_coordinator = HanchuessStatisticsCoordinator(hass, entry, client)
     await stats_coordinator.async_config_entry_first_refresh()
 
+    coordinator = HanchuessRealtimeCoordinator(hass, entry, client)
+    await coordinator.async_config_entry_first_refresh()
+
+    stats_coordinator = HanchuessStatisticsCoordinator(hass, entry, client)
+    await stats_coordinator.async_config_entry_first_refresh()
+
+    # Fetch menu to get device-specific min/max values for number entities
+    language = hass.config.language or "en"
+    sn = entry.data["sn"]
+    number_limits = {
+        "CHG_PWR_LMT": {"min": 0, "max": 5000},
+        "DSCHG_PWR_LMT": {"min": 0, "max": 5000},
+        "CHG_BAT_SOC_LMT": {"min": 50, "max": 100},
+        "DSCHG_BAT_SOC_LMT": {"min": 5, "max": 45},
+        "DTU_AC_CHG_SOC_LMT": {"min": 20, "max": 100},
+    }
+    try:
+        menu_data = await client.async_get_menu(sn, language)
+        energy = menu_data.get("data", {}).get("energy", {})
+        for group in energy.get("items", []):
+            for item in group:
+                signal = item.get("itemCodeSignal", "")
+                if signal in number_limits:
+                    try:
+                        min_val = float(item.get("minVal", number_limits[signal]["min"]))
+                        max_val = float(item.get("maxVal", number_limits[signal]["max"]))
+                        if min_val is not None and max_val is not None:
+                            number_limits[signal]["min"] = min_val
+                            number_limits[signal]["max"] = max_val
+                            _LOGGER.info("[HANCHUESS] %s limits: %s-%s", signal, min_val, max_val)
+                    except (ValueError, TypeError):
+                        pass
+    except Exception as err:
+        _LOGGER.warning("[HANCHUESS] Could not fetch menu for number limits, using defaults: %s", err)
+
+    hass.data[DOMAIN][entry.entry_id] = {
+        "realtime": coordinator,
+        "statistics": stats_coordinator,
+        "number_limits": number_limits,
+    }
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
     hass.data[DOMAIN][entry.entry_id] = {
         "realtime": coordinator,
         "statistics": stats_coordinator,
