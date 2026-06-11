@@ -73,6 +73,14 @@ SENSORS = {
         "unit": UnitOfEnergy.KILO_WATT_HOUR,
         "icon": "mdi:battery",
     },
+    "ac_coupled_pv_power": {
+        "key": "bypMeterTotalPower",
+        "device_class": SensorDeviceClass.POWER,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "unit": UnitOfPower.WATT,
+        "icon": "mdi:solar-power",
+        "auto_watt": True,
+    },
 }
 
 STATISTICS_SENSORS = {
