@@ -221,13 +221,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    hass.data[DOMAIN][entry.entry_id] = {
-        "realtime": coordinator,
-        "statistics": stats_coordinator,
-    }
-
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
     # Register service for batch control
     async def handle_device_control(call: ServiceCall):
         sn = call.data["sn"]
