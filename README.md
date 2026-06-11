@@ -20,8 +20,8 @@ This fork extends the original [guoxiatech/hanchu-ess-ha](https://github.com/guo
 
 ### Controls (fully automatable)
 - **Work Mode** — Self-consumption, Backup Energy, User-defined, Off-grid
-- **Charge Power Limit** (0–5000W)
-- **Discharge Power Limit** (0–5000W)
+- **Charge Power Limit** 
+- **Discharge Power Limit** 
 - **Maximum Charge SOC** (50–100%)
 - **Minimum Discharge SOC** (5–45%)
 - **Grid to Battery Charge Maximum** (20–100%)
