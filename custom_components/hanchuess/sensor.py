@@ -290,7 +290,9 @@ class HanchueSensor(CoordinatorEntity, SensorEntity):
         self._attr_icon = config.get("icon")
         if "name" in config:
             self._attr_name = config["name"]
+            self._attr_has_entity_name = False
         else:
+            self._attr_has_entity_name = True
             self._attr_translation_key = sensor_key
         if "device_class" in config:
             self._attr_device_class = config["device_class"]
