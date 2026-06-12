@@ -87,6 +87,13 @@ SENSORS = {
         "icon": "mdi:solar-power",
         "auto_watt": True,
     },
+    "fast_charge_time_remaining": {
+        "key": "testTimeRemain",
+        "name": "Fast Charge Time Remaining",
+        "state_class": SensorStateClass.MEASUREMENT,
+        "unit": "min",
+        "icon": "mdi:timer-outline",
+    },
 }
 
 STATISTICS_SENSORS = {
