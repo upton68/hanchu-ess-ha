@@ -51,15 +51,20 @@
       "daily_grid_import": { "name": "Daily Grid Import" },
       "daily_grid_export": { "name": "Daily Grid Export" },
       "daily_dg_energy": { "name": "Daily Generator Energy" },
+      "ext_ac_power": { "name": "AC Coupled PV Power" },
+      "battery_capacity": { "name": "Battery Capacity" },
       "fast_charge_time_remaining": { "name": "Fast Charge Time Remaining" }
     },
     "number": {
       "charge_power_limit": { "name": "Charge Power Limit" },
       "discharge_power_limit": { "name": "Discharge Power Limit" },
-      "soc_min": { "name": "SOC Minimum" }
+      "max_charge_soc": { "name": "Maximum Charge SOC" },
+      "min_discharge_soc": { "name": "Minimum Discharge SOC" },
+      "grid_charge_soc_limit": { "name": "Grid to Battery Charge Maximum" }
     },
     "switch": {
-      "inverter_switch": { "name": "Inverter" }
+      "fast_charge": { "name": "Fast Charge" },
+      "fast_discharge": { "name": "Fast Discharge" }
     }
   }
 }
