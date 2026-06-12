@@ -50,7 +50,7 @@ class FastChargeSwitch(SwitchEntity):
 
     async def async_turn_on(self, **kwargs) -> None:
         result = await self._client.async_fast_charge_discharge(
-            self._entry.data["sn"], 1, FAST_CHARGE_DURATION
+            self._entry.data["sn"], 2, FAST_CHARGE_DURATION
         )
         if result.get("success"):
             self._attr_is_on = True
@@ -61,7 +61,7 @@ class FastChargeSwitch(SwitchEntity):
 
     async def async_turn_off(self, **kwargs) -> None:
         result = await self._client.async_fast_charge_discharge(
-            self._entry.data["sn"], 0, 0
+            self._entry.data["sn"], -2, 0
         )
         if result.get("success"):
             self._attr_is_on = False
@@ -95,7 +95,7 @@ class FastDischargeSwitch(SwitchEntity):
 
     async def async_turn_on(self, **kwargs) -> None:
         result = await self._client.async_fast_charge_discharge(
-            self._entry.data["sn"], -1, FAST_CHARGE_DURATION
+            self._entry.data["sn"], 3, FAST_CHARGE_DURATION
         )
         if result.get("success"):
             self._attr_is_on = True
@@ -106,7 +106,7 @@ class FastDischargeSwitch(SwitchEntity):
 
     async def async_turn_off(self, **kwargs) -> None:
         result = await self._client.async_fast_charge_discharge(
-            self._entry.data["sn"], 0, 0
+            self._entry.data["sn"], -3, 0
         )
         if result.get("success"):
             self._attr_is_on = False
