@@ -279,7 +279,7 @@ async def async_setup_entry(
 
 
 class HanchueSensor(CoordinatorEntity, SensorEntity):
-    _attr_has_entity_name = True
+  pass
 
     def __init__(self, coordinator, entry, sensor_key, config):
         super().__init__(coordinator)
