@@ -33,6 +33,12 @@ SENSORS = {
         "icon": "mdi:battery-charging",
         "auto_watt": True,
     },
+    "fast_charge_time_remaining": {
+        "key": "testTimeRemain",
+        "state_class": SensorStateClass.MEASUREMENT,
+        "unit": "min",
+        "icon": "mdi:timer-outline",
+    },
     "pv_power": {
         "key": "pvTtPwr",
         "device_class": SensorDeviceClass.POWER,
