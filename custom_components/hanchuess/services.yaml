@@ -20,3 +20,37 @@ device_control:
       required: true
       selector:
         object:
+ fast_charge:
+    name: Fast Charge/Discharge
+    description: Trigger fast charge or discharge on the Hanchu inverter for a set duration.
+    fields:
+      sn:
+        name: Serial Number
+        description: Inverter serial number. Optional if you only have one inverter configured.
+        required: false
+        example: "H0157156P0170"
+        selector:
+          text:
+      act:
+        name: Action
+        description: >
+        Action code: 2 = start fast charge, -2 = stop fast charge,
+        3 = start fast discharge, -3 = stop fast discharge.
+        required: true
+        example: 2
+        selector:
+          number:
+            min: -3
+            max: 3
+            step: 1
+      duration:
+        name: Duration
+        description: Duration in seconds. Required when starting (act 2 or 3).
+        required: false
+        example: 1800
+        selector:
+          number:
+            min: 0
+            max: 86400
+            step: 60
+            unit_of_measurement: seconds
