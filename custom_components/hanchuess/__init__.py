@@ -252,6 +252,50 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             DOMAIN, SERVICE_DEVICE_CONTROL, handle_device_control, schema=SERVICE_SCHEMA
         )
 
+    async def handle_fast_charge(call: ServiceCall):
+        sn = call.data.get("sn")
+
+        if not sn:
+            for eid, data in hass.data[DOMAIN].items():
+                if isinstance(data, dict) and "realtime" in data:
+                    sn = data["realtime"].entry.data.get("sn")
+                    break
+
+        if not sn:
+            _LOGGER.error("[HANCHUESS] fast_charge: No inverter serial found")
+            return
+
+        act = call.data["act"]
+        duration = call.data.get("duration", 0)
+
+        target_client = None
+        for eid, data in hass.data[DOMAIN].items():
+            if isinstance(data, dict) and "realtime" in data:
+                if data["realtime"].entry.data.get("sn") == sn:
+                    target_client = data["realtime"].client
+                    break
+
+        if not target_client:
+            _LOGGER.error("[HANCHUESS] fast_charge: device %s not found", sn)
+            return
+
+        result = await target_client.async_fast_charge_discharge(sn, act, duration)
+
+        if not result.get("success"):
+            _LOGGER.error("[HANCHUESS] fast_charge failed: %s", result.get("msg"))
+
+    if not hass.services.has_service(DOMAIN, "fast_charge"):
+        hass.services.async_register(
+            DOMAIN,
+            "fast_charge",
+            handle_fast_charge,
+            schema=vol.Schema({
+                vol.Optional("sn"): cv.string,
+                vol.Required("act"): vol.All(int, vol.Range(min=-3, max=3)),
+                vol.Optional("duration"): vol.All(int, vol.Range(min=0)),
+            }),
+        )
+
     pending = entry.data.get("pending_devices", [])
     if pending:
         for item in pending:
