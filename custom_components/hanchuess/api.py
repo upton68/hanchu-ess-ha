@@ -49,7 +49,9 @@ class HanchuessApiClient:
         _LOGGER.debug("[HANCHUESS] request: %s token=%s", url, "yes" if self._token else "no")
         try:
             async with async_timeout.timeout(10):
-                async with aiohttp.ClientSession() as session:
+                async with aiohttp.ClientSession(
+                    connector=aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
+                ) as session:
                     async with session.post(
                         url, json=data, headers=self._headers(language)
                     ) as response:
