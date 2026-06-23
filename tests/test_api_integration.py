@@ -12,7 +12,6 @@ Write-path tests (device_control, fast_charge_discharge) require:
   HANCHUESS_ALLOW_WRITE=1  (not set by default to avoid unintended device changes)
 """
 import os
-import sys
 
 import pytest
 import pytest_asyncio
@@ -25,9 +24,6 @@ if not ACCOUNT or not PASSWORD:
         "HANCHUESS_ACCOUNT and HANCHUESS_PASSWORD must be set to run integration tests",
         allow_module_level=True,
     )
-
-# Allow imports from the repo root without an install step
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from custom_components.hanchuess.api import HanchuessApiClient
 from custom_components.hanchuess.const import BASE_URL

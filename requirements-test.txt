@@ -1,4 +1,9 @@
+# Cross-platform test dependencies (work on Windows and Linux).
+# These cover the offline API tests (tests/test_api_mocked.py) and the pure
+# entity-logic tests (tests/test_logic.py).
 pytest>=7
 pytest-asyncio>=0.21
 aiohttp>=3.9
 async-timeout>=4.0
+aioresponses>=0.7
+homeassistant>=2024.1.0

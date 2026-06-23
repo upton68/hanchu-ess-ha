@@ -1,0 +1,9 @@
+# CI-only test dependencies — adds the Home Assistant test harness used by the
+# config-flow tests (tests/test_config_flow.py).
+#
+# pytest-homeassistant-custom-component pulls in Home Assistant core, which
+# imports Unix-only modules (fcntl) and therefore CANNOT be installed/run on
+# Windows. Install this file on Linux/CI only. For local development on Windows,
+# use requirements-test.txt (the config-flow tests skip automatically).
+-r requirements-test.txt
+pytest-homeassistant-custom-component>=0.13
