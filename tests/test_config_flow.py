@@ -24,6 +24,19 @@ pytestmark = pytest.mark.usefixtures("enable_custom_integrations")
 CLIENT_PATH = "custom_components.hanchuess.config_flow.HanchuessApiClient"
 
 
+@pytest.fixture(autouse=True)
+def _bypass_card_dependencies(hass):
+    """Skip dependency setup when the integration is loaded for the flow.
+
+    The integration depends on frontend/http/websocket_api only to register the
+    bundled Lovelace card; none are needed to exercise the config flow, and the
+    HA test harness cannot set up `frontend`. Marking them as already loaded
+    makes integration loading skip dependency setup.
+    """
+    for dep in ("http", "websocket_api", "frontend"):
+        hass.config.components.add(dep)
+
+
 def _patched_client(token="tok", devices=None):
     """Patch HanchuessApiClient in config_flow with a mock instance."""
     patcher = patch(CLIENT_PATH)

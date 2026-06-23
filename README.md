@@ -248,9 +248,19 @@ pip install -r requirements-test.txt
 pytest
 ```
 
-> Do **not** `pip install pytest-homeassistant-custom-component` on Windows — it
-> brings in HA core (which needs `fcntl`) and will break the entire local pytest
-> session, not just the config-flow tests.
+> Do **not** install `pytest-homeassistant-custom-component` on Windows (directly,
+> or via `requirements-test-ha.txt`). It brings in HA core, whose pytest plugin
+> imports `fcntl` (Unix-only) at startup and breaks the **entire** local pytest
+> session — every test, not just the config-flow ones, fails to collect with
+> `ModuleNotFoundError: No module named 'fcntl'`.
+>
+> If it does end up installed in your Windows environment, recover with either:
+>
+> ```powershell
+> pip uninstall pytest-homeassistant-custom-component   # restores a clean setup
+> # ...or block its plugin for a single run without uninstalling:
+> pytest -p no:homeassistant
+> ```
 
 #### Linux / CI (full suite)
 
