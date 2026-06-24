@@ -290,10 +290,12 @@ pytest tests/test_api_integration.py
 On Windows PowerShell, set these with `$env:HANCHUESS_ACCOUNT = "..."` instead of
 `export`.
 
-## Known Limitations
+**Known Limitations**
+
+- The Hanchu API returns mixed units for power sensors (watts below 1kW, kilowatts above). The integration includes a heuristic to handle most cases automatically, however readings in the 1–9W range may occasionally be misreported. A full fix using the explicit unit fields returned by the API is currently in progress.
 
 - Battery unit sensors (individual pack SOC, SOH, temperature, voltage) are not yet implemented — these require a separate API endpoint
-- The Hanchu API returns mixed units for power sensors (watts below 1kW, kilowatts above) — the integration handles this automatically
+
 - Token refresh is handled automatically every 25 days
 
 ## Credits
