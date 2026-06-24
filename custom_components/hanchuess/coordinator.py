@@ -11,7 +11,6 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 REALTIME_INTERVAL = timedelta(seconds=60)
-STATISTICS_INTERVAL = timedelta(minutes=5)
 
 
 def _raise_auth_failed(client: HanchuessApiClient, msg: str):
@@ -68,44 +67,6 @@ class HanchuessRealtimeCoordinator(DataUpdateCoordinator):
 
         if not data:
             raise UpdateFailed("Failed to get device status")
-        return data
-
-    def _update_entry_token(self, token: str):
-        for entry in self.hass.config_entries.async_entries(DOMAIN):
-            self.hass.config_entries.async_update_entry(
-                entry, data={**entry.data, "token": token}
-            )
-
-
-class HanchuessStatisticsCoordinator(DataUpdateCoordinator):
-    """Statistics data coordinator (5min)."""
-
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: HanchuessApiClient):
-        super().__init__(
-            hass,
-            _LOGGER,
-            name="hanchuess_statistics",
-            update_interval=STATISTICS_INTERVAL,
-        )
-        self.entry = entry
-        self.client = client
-
-    async def _async_update_data(self) -> dict:
-        sn = self.entry.data["sn"]
-        language = self.hass.config.language or "en"
-
-        data = await self.client.async_get_device_statistics(sn, language)
-
-        if data and data.get("_token_expired"):
-            refreshed = await _try_refresh(self.client, self._update_entry_token, force=True)
-            if refreshed:
-                data = await self.client.async_get_device_statistics(sn, language)
-
-        if data and data.get("_token_expired"):
-            _raise_auth_failed(self.client, "Token expired and refresh failed")
-
-        if not data:
-            raise UpdateFailed("Failed to get device statistics")
         return data
 
     def _update_entry_token(self, token: str):

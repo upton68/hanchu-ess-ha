@@ -93,55 +93,55 @@ SENSORS = {
 
 STATISTICS_SENSORS = {
     "daily_load_energy": {
-        "key": "load",
+        "key": "loadTdEe",
         "device_class": SensorDeviceClass.ENERGY,
         "state_class": SensorStateClass.TOTAL_INCREASING,
         "unit": UnitOfEnergy.KILO_WATT_HOUR,
         "icon": "mdi:home-lightning-bolt",
     },
     "daily_charge_energy": {
-        "key": "batCharge",
+        "key": "batTdChg",
         "device_class": SensorDeviceClass.ENERGY,
         "state_class": SensorStateClass.TOTAL_INCREASING,
         "unit": UnitOfEnergy.KILO_WATT_HOUR,
         "icon": "mdi:battery-plus",
     },
     "daily_discharge_energy": {
-        "key": "batDisCharge",
+        "key": "batTdDschg",
         "device_class": SensorDeviceClass.ENERGY,
         "state_class": SensorStateClass.TOTAL_INCREASING,
         "unit": UnitOfEnergy.KILO_WATT_HOUR,
         "icon": "mdi:battery-minus",
     },
     "daily_pv_energy": {
-        "key": "pv",
+        "key": "pvDge",
         "device_class": SensorDeviceClass.ENERGY,
         "state_class": SensorStateClass.TOTAL_INCREASING,
         "unit": UnitOfEnergy.KILO_WATT_HOUR,
         "icon": "mdi:solar-power",
     },
     "daily_grid_import": {
-        "key": "gridImport",
+        "key": "gridTdEe",
         "device_class": SensorDeviceClass.ENERGY,
         "state_class": SensorStateClass.TOTAL_INCREASING,
         "unit": UnitOfEnergy.KILO_WATT_HOUR,
         "icon": "mdi:transmission-tower-import",
     },
     "daily_grid_export": {
-        "key": "gridExport",
+        "key": "gridTdFe",
         "device_class": SensorDeviceClass.ENERGY,
         "state_class": SensorStateClass.TOTAL_INCREASING,
         "unit": UnitOfEnergy.KILO_WATT_HOUR,
         "icon": "mdi:transmission-tower-export",
     },
     "daily_dg_energy": {
-        "key": "dgEp",
+        "key": "dgTdEp",
         "device_class": SensorDeviceClass.ENERGY,
         "state_class": SensorStateClass.TOTAL_INCREASING,
         "unit": UnitOfEnergy.KILO_WATT_HOUR,
         "icon": "mdi:engine",
         "condition_key": "hasDg",
-        "condition_value": 1,
+        "condition_value": True,
     },
 }
 
@@ -262,21 +262,17 @@ async def async_setup_entry(
 ):
     data = hass.data[DOMAIN][entry.entry_id]
     realtime = data["realtime"]
-    statistics = data["statistics"]
     entities = []
     entities.append(DeviceStatusSensor(realtime, entry))
-    for sensor_key, config in SENSORS.items():
+    # Both realtime power sensors and the daily kWh totals are served by the
+    # realtime coordinator (getDeviceStatus carries both sets of fields).
+    for sensor_key, config in {**SENSORS, **STATISTICS_SENSORS}.items():
         cond_key = config.get("condition_key")
-        if cond_key:
-            if realtime.data.get(cond_key) != config.get("condition_value"):
-                continue
+        # Truthy gating: a conditional sensor (e.g. hasDg) is added whenever the
+        # gate field is truthy, tolerating either True or 1 from the API.
+        if cond_key and not realtime.data.get(cond_key):
+            continue
         entities.append(HanchueSensor(realtime, entry, sensor_key, config))
-    for sensor_key, config in STATISTICS_SENSORS.items():
-        cond_key = config.get("condition_key")
-        if cond_key:
-            if statistics.data.get(cond_key) != config.get("condition_value"):
-                continue
-        entities.append(HanchueSensor(statistics, entry, sensor_key, config))
     async_add_entities(entities)
 
 
