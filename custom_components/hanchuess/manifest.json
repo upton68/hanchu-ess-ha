@@ -1,7 +1,7 @@
 {
     "domain": "hanchuess",
     "name": "Hanchuess",
-    "codeowners": ["@guoxiatech", "@upton68"],
+    "codeowners": ["@upton68"],
     "config_flow": true,
     "dependencies": ["frontend", "http", "websocket_api"],
     "documentation": "https://github.com/upton68/hanchu-ess-ha",
