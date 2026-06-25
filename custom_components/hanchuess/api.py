@@ -131,18 +131,6 @@ class HanchuessApiClient:
             return result.get("data", {})
         return {}
 
-    async def async_get_device_statistics(self, sn: str, language: str = "en") -> dict | None:
-        result = await self._request(
-            "/gateway/app/ha/getDeviceStatistics",
-            {"sn": sn},
-            language=language,
-        )
-        if result and result.get("code") == 401:
-            return {"_token_expired": True}
-        if result and result.get("success"):
-            return result.get("data", {})
-        return {}
-
     async def async_get_menu(self, sn: str, language: str = "en") -> dict:
         result = await self._request(
             "/gateway/app/ha/menu",
