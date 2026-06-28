@@ -104,6 +104,12 @@ async def test_get_device_status(client, sn):
     assert "_token_expired" not in data
 
 
+async def test_get_device_statistics(client, sn):
+    data = await client.async_get_device_statistics(sn)
+    assert isinstance(data, dict)
+    assert "_token_expired" not in data
+
+
 async def test_get_menu(client, sn):
     data = await client.async_get_menu(sn)
     assert isinstance(data, dict)

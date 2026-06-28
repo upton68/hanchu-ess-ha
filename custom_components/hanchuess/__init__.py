@@ -9,7 +9,7 @@ from homeassistant.components import websocket_api
 import homeassistant.helpers.config_validation as cv
 from .const import DOMAIN, PLATFORMS, BASE_URL
 from .api import HanchuessApiClient
-from .coordinator import HanchuessRealtimeCoordinator
+from .coordinator import HanchuessRealtimeCoordinator, HanchuessStatisticsCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -158,6 +158,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = HanchuessRealtimeCoordinator(hass, entry, client)
     await coordinator.async_config_entry_first_refresh()
 
+    stats_coordinator = HanchuessStatisticsCoordinator(hass, entry, client)
+    await stats_coordinator.async_config_entry_first_refresh()
+
     # Fetch menu to get device-specific min/max values for number entities
     language = hass.config.language or "en"
     sn = entry.data["sn"]
@@ -219,6 +222,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data[DOMAIN][entry.entry_id] = {
         "realtime": coordinator,
+        "statistics": stats_coordinator,
         "number_limits": number_limits,
         "startup_values": startup_values,
     }

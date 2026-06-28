@@ -17,6 +17,7 @@ LOGIN = f"{BASE_URL}/gateway/identify/auth/token"
 REFRESH = f"{BASE_URL}/gateway/identify/auth/token/refresh"
 DEVICE_LIST = f"{BASE_URL}/gateway/app/ha/getDeviceList"
 STATUS = f"{BASE_URL}/gateway/app/ha/getDeviceStatus"
+STATISTICS = f"{BASE_URL}/gateway/app/ha/getDeviceStatistics"
 MENU = f"{BASE_URL}/gateway/app/ha/menu"
 IOT_GET = f"{BASE_URL}/gateway/app/ha/iotGet"
 IOT_SET = f"{BASE_URL}/gateway/app/ha/iotSet"
@@ -106,7 +107,7 @@ async def test_get_devices_empty_on_unsuccess():
 
 
 # ---------------------------------------------------------------------------
-# Device status — success, empty, token-expired
+# Device status / statistics — success, empty, token-expired
 # ---------------------------------------------------------------------------
 
 async def test_get_device_status_success():
@@ -115,26 +116,6 @@ async def test_get_device_status_success():
         m.post(STATUS, payload={"success": True, "data": {"batSoc": 55}})
         data = await client.async_get_device_status("SN1")
     assert data == {"batSoc": 55}
-
-
-async def test_get_device_status_includes_daily_totals():
-    """getDeviceStatus also carries the daily kWh totals consumed by the
-    daily_* sensors (consolidated from the old getDeviceStatistics endpoint)."""
-    totals = {
-        "loadTdEe": 14.64,
-        "batTdChg": 8.80,
-        "batTdDschg": 5.50,
-        "pvDge": 24.70,
-        "gridTdEe": 0.24,
-        "gridTdFe": 7.00,
-        "dgTdEp": 0.00,
-    }
-    client = HanchuessApiClient(BASE_URL, token="t")
-    with aioresponses() as m:
-        m.post(STATUS, payload={"success": True, "data": {"batSoc": 55, **totals}})
-        data = await client.async_get_device_status("SN1")
-    for key, value in totals.items():
-        assert data[key] == value
 
 
 async def test_get_device_status_empty_on_unsuccess():
@@ -152,6 +133,14 @@ async def test_get_device_status_401_flags_token_expired():
         m.post(STATUS, status=401)
         data = await client.async_get_device_status("SN1")
     assert data == {"_token_expired": True}
+
+
+async def test_get_device_statistics_success():
+    client = HanchuessApiClient(BASE_URL, token="t")
+    with aioresponses() as m:
+        m.post(STATISTICS, payload={"success": True, "data": {"load": 12.3}})
+        data = await client.async_get_device_statistics("SN1")
+    assert data == {"load": 12.3}
 
 
 # ---------------------------------------------------------------------------

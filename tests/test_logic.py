@@ -13,7 +13,6 @@ pytest.importorskip("homeassistant")
 from custom_components.hanchuess import time as time_mod
 from custom_components.hanchuess.sensor import (
     SENSORS,
-    STATISTICS_SENSORS,
     HanchueSensor,
     _parse_energy_menu,
 )
@@ -128,31 +127,6 @@ def test_auto_watt_missing_value_returns_none():
 def test_scale_factor_applied():
     s = _make_sensor({"key": "batSoc", "scale": 100}, 0.55)
     assert s.native_value == 55.0
-
-
-# ---------------------------------------------------------------------------
-# Daily kWh sensors now read from the getDeviceStatus payload
-# (consolidated from the removed getDeviceStatistics endpoint).
-# ---------------------------------------------------------------------------
-
-def test_daily_sensors_use_get_device_status_keys():
-    """The daily_* sensors must read the getDeviceStatus field names."""
-    expected = {
-        "daily_load_energy": "loadTdEe",
-        "daily_charge_energy": "batTdChg",
-        "daily_discharge_energy": "batTdDschg",
-        "daily_pv_energy": "pvDge",
-        "daily_grid_import": "gridTdEe",
-        "daily_grid_export": "gridTdFe",
-        "daily_dg_energy": "dgTdEp",
-    }
-    actual = {name: cfg["key"] for name, cfg in STATISTICS_SENSORS.items()}
-    assert actual == expected
-
-
-def test_daily_sensor_reads_value_from_coordinator():
-    s = _make_sensor(STATISTICS_SENSORS["daily_load_energy"], 14.64)
-    assert s.native_value == 14.64
 
 
 # ---------------------------------------------------------------------------
