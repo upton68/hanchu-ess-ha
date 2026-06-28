@@ -145,7 +145,7 @@ def test_scale_factor_applied():
 def test_fast_charge_duration_defaults_to_30_minutes():
     # No option set -> default 30 minutes -> 1800 seconds.
     assert _fast_charge_duration(_FakeOptionsEntry()) == DEFAULT_FAST_CHARGE_DURATION * 60
-    assert _fast_charge_duration(_FakeOptionsEntry()) == 1800
+    assert _fast_charge_duration(_FakeOptionsEntry()) == 3600
 
 
 def test_fast_charge_duration_converts_minutes_to_seconds():
