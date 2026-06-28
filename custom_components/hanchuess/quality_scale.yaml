@@ -1,0 +1,136 @@
+# Tracks this integration's progress against Home Assistant's integration
+# quality scale: https://developers.home-assistant.io/docs/core/integration-quality-scale/
+#
+# TODO manifest.json — deliberately unchanged. I did not add the quality_scale key: the integration hasn't
+#   achieved bronze (several real rules need to pass), so declaring a tier would be inaccurate and would fail
+#   hassfest's bronze-completeness check. The YAML stands as a tracking document, which the
+#   custom-component hassfest action doesn't strictly validate.
+rules:
+  # Bronze
+  action-setup:
+    status: todo
+    comment: Services are registered in async_setup_entry, not async_setup.
+  appropriate-polling:
+    status: done
+    comment: Realtime coordinator polls every 60s, statistics every 5min.
+  brands:
+    status: todo
+    comment: Brand assets not yet submitted to home-assistant/brands.
+  common-modules:
+    status: done
+    comment: Shared logic lives in api.py and coordinator.py.
+  config-flow-test-coverage:
+    status: todo
+    comment: No local test suite.
+  config-flow:
+    status: done
+  dependency-transparency:
+    status: done
+    comment: No third-party requirements; uses HA-provided aiohttp.
+  docs-actions:
+    status: todo
+  docs-high-level-description:
+    status: done
+  docs-installation-instructions:
+    status: done
+  docs-removal-instructions:
+    status: todo
+  entity-event-setup:
+    status: done
+  entity-unique-id:
+    status: done
+  has-entity-name:
+    status: todo
+  runtime-data:
+    status: todo
+    comment: State is stored in hass.data rather than entry.runtime_data.
+  test-before-configure:
+    status: done
+    comment: Config flow validates login and device list before creating the entry.
+  test-before-setup:
+    status: done
+    comment: async_config_entry_first_refresh raises on failure.
+  unique-config-entry:
+    status: done
+    comment: Unique id is the device serial number.
+
+  # Silver
+  action-exceptions:
+    status: todo
+  config-entry-unloading:
+    status: done
+    comment: async_unload_entry unloads platforms and clears hass.data.
+  docs-configuration-parameters:
+    status: todo
+  docs-installation-parameters:
+    status: todo
+  entity-unavailable:
+    status: todo
+  integration-owner:
+    status: done
+  log-when-unavailable:
+    status: todo
+  parallel-updates:
+    status: todo
+  reauthentication-flow:
+    status: done
+    comment: Reauth flow handled in config_flow.py on token expiry.
+  test-coverage:
+    status: todo
+
+  # Gold
+  devices:
+    status: done
+    comment: Each entry registers one device via DeviceInfo identifiers.
+  diagnostics:
+    status: done
+  discovery-update-info:
+    status: exempt
+    comment: Cloud-polling integration; no local network discovery.
+  discovery:
+    status: exempt
+    comment: Cloud-polling integration; no local network discovery.
+  docs-data-update:
+    status: todo
+  docs-examples:
+    status: todo
+  docs-known-limitations:
+    status: todo
+  docs-supported-devices:
+    status: todo
+  docs-supported-functions:
+    status: todo
+  docs-troubleshooting:
+    status: todo
+  docs-use-cases:
+    status: todo
+  dynamic-devices:
+    status: todo
+  entity-category:
+    status: todo
+  entity-device-class:
+    status: todo
+  entity-disabled-by-default:
+    status: todo
+  entity-translations:
+    status: todo
+  exception-translations:
+    status: todo
+  icon-translations:
+    status: todo
+  reconfiguration-flow:
+    status: todo
+  repair-issues:
+    status: done
+    comment: Token refresh failure raises a HA repair (reauth) flow.
+  stale-devices:
+    status: todo
+
+  # Platinum
+  async-dependency:
+    status: done
+    comment: All I/O is async via aiohttp.
+  inject-websession:
+    status: todo
+  strict-typing:
+    status: todo
