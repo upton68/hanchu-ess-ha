@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Extract changelog section for this version
+        id: changelog
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          BODY=$(awk \
+            "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" \
+            CHANGELOG.md)
+          if [ -z "$BODY" ]; then
+            echo "ERROR: No changelog entry found for version ${VERSION}" >&2
+            exit 1
+          fi
+          echo "$BODY" > /tmp/release_notes.md
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Build release zip
+        run: |
+          cd custom_components/hanchu_ess
+          zip -r ../../hanchu_ess.zip . --exclude "**/__pycache__/*" --exclude "**/*.pyc"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Hanchu ESS ${{ steps.changelog.outputs.version }}"
+          body_path: /tmp/release_notes.md
+          files: hanchu_ess.zip
+          draft: false
+          prerelease: false
