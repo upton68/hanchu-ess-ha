@@ -10,10 +10,21 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [1.2.10] - 2026-06-30
+
 ### Added
-- `README.md` updates,  `CONTRIBUTING.md`, `CHANGELOG.md`, GitHub issue/PR templates, and a
-  Dependabot config (GitHub Actions + pip).
-- Publish content is in a zipped archive when releases are published on GitHub
+- `CONTRIBUTING.md`, `CHANGELOG.md`, GitHub issue/PR templates, and a Dependabot
+  config (GitHub Actions + pip).
+- Automated GitHub Release workflow — pushing a `vX.Y.Z` tag to `main` builds
+  `hanchuess.zip` and publishes a release using the matching CHANGELOG section.
+- `loggers` key in `manifest.json` for proper HA logger registration (#13).
+
+### Changed
+- README trimmed: development/testing instructions moved to `CONTRIBUTING.md`;
+  Configuration section corrected to reflect account/password setup with device
+  selection (no manual serial entry).
+- `hacs.json`: added `zip_release` and `filename` so HACS installs from the
+  release zip asset.
 
 ### Removed
 - Unused screenshot images under `docs/`.
@@ -81,7 +92,8 @@ later versions are tracked here going forward.
 - Initial fork of the original integration with read-only battery, grid, PV, and
   load sensors and the custom Lovelace card.
 
-[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v1.2.9...HEAD
+[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v1.2.10...HEAD
+[1.2.10]: https://github.com/upton68/hanchu-ess-ha/compare/v1.2.9...v1.2.10
 [1.2.9]: https://github.com/upton68/hanchu-ess-ha/compare/v1.2.8...v1.2.9
 [1.2.8]: https://github.com/upton68/hanchu-ess-ha/compare/v1.2.7...v1.2.8
 [1.2.7]: https://github.com/upton68/hanchu-ess-ha/compare/v1.2.6...v1.2.7
