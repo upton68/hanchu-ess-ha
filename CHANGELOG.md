@@ -10,6 +10,14 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Added
+- `README.md` updates,  `CONTRIBUTING.md`, `CHANGELOG.md`, GitHub issue/PR templates, and a
+  Dependabot config (GitHub Actions + pip).
+- Publish content is in a zipped archive when releases are published on GitHub
+
+### Removed
+- Unused screenshot images under `docs/`.
+
 ## [1.2.9] - 2026-06-29
 
 ### Added
@@ -20,9 +28,6 @@ later versions are tracked here going forward.
 ### Changed
 - README: corrected the setup instructions (account/password + device selection,
   no manual serial entry) and documented the options flow.
-
-### Removed
-- Unused screenshot images under `docs/`.
 
 ## [1.2.8] - 2026-06-29
 
