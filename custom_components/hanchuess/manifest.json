@@ -10,5 +10,5 @@
     "issue_tracker": "https://github.com/upton68/hanchu-ess-ha/issues",
     "loggers": ["custom_components.hanchuess"],
     "requirements": [],
-    "version": "1.2.9"
+    "version": "1.2.10"
 }
