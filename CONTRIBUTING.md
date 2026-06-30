@@ -213,9 +213,10 @@ it **must** match the tag you push in step 5.
 
 In `CHANGELOG.md`:
 
-1. Rename the `## [Unreleased]` heading to `## [X.Y.Z] - YYYY-MM-DD` (today's
-   date, ISO format).
-2. Add a fresh, empty `## [Unreleased]` section above it for future work.
+1. Add a heading between `## [Unreleased]` and the last release heading; 
+   `## [X.Y.Z] - YYYY-MM-DD` (today's date, ISO format).
+2. Move any changes from the `## [Unreleased]` section to your new heading,
+   keeping the `## [Unreleased]` section intact.
 3. Update the link reference definitions at the bottom of the file:
    - Point the `[Unreleased]` link at `compare/vX.Y.Z...HEAD`.
    - Add a `[X.Y.Z]` link, e.g.
