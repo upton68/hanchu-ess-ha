@@ -140,23 +140,29 @@ class HanchuessTimeSlot(TimeEntity):
         self._debounce_task = asyncio.ensure_future(self._send_after_delay())
 
     async def _send_after_delay(self) -> None:
-        """Wait for debounce period then send to API."""
-        try:
-            await asyncio.sleep(DEBOUNCE_SECONDS)
-            value = self._pending_value
-            if value is None:
-                return
-            seconds = (value.hour * 3600) + (value.minute * 60)
-            result = await self._client.async_device_control(
-                self._entry.data["sn"],
-                "2",
-                {self._config["control_key"]: seconds},
+    """Wait for debounce period then send to API."""
+    try:
+        await asyncio.sleep(DEBOUNCE_SECONDS)
+        value = self._pending_value
+        if value is None:
+            return
+        seconds = (value.hour * 3600) + (value.minute * 60)
+        result = await self._client.async_device_control(
+            self._entry.data["sn"],
+            "2",
+            {self._config["control_key"]: seconds},
+        )
+        if result and result.get("success"):
+            _LOGGER.info("%s set to %s seconds", self._config["name"], seconds)
+            self._pending_value = None
+        else:
+            _LOGGER.error(
+                "Failed to set %s: %s — reverting displayed state",
+                self._config["name"],
+                result.get("msg") if result else "no response",
             )
-            if result.get("success"):
-                _LOGGER.info("%s set to %s seconds", self._config["name"], seconds)
-            else:
-                _LOGGER.error(
-                    "Failed to set %s: %s", self._config["name"], result.get("msg")
-                )
-        except asyncio.CancelledError:
-            pass
+            self._pending_value = None
+            self._attr_native_value = self._last_confirmed_value
+            self.async_write_ha_state()
+    except asyncio.CancelledError:
+        pass
