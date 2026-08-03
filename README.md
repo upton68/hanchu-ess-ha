@@ -194,43 +194,107 @@ After initial setup, polling intervals and fast charge duration can be adjusted 
 
 ## Predbat Integration
 
-This integration is compatible with [Predbat](https://github.com/springfall2008/batpow) for intelligent battery scheduling.
+The Hanchu iESS integration works with [Predbat](https://springfall2008.github.io/batpred/) via Predbat's generic Service API, using bridge `input_boolean` helpers that trigger Home Assistant automations. Those automations then call `hanchuess.device_control` to actually start/stop charging and discharging on the inverter.
 
-### Recommended apps.yaml mappings
+### 1. Create the bridge helpers
+
+In Home Assistant, create two `input_boolean` helpers:
+- `input_boolean.predbat_charge_start`
+- `input_boolean.predbat_discharge_start`
+
+Wire up automations that trigger on these turning on/off and call `hanchuess.device_control` (with `response_variable: result` and a check on `result.success`) to actually control the inverter.
+
+### 2. apps.yaml configuration
 
 ```yaml
+num_inverters: 1
+
 inverter_type: "HC"
 inverter:
+  name: "Hanchu iESS"
+  has_rest_api: false
+  has_mqtt_api: false
   has_service_api: true
   output_charge_control: "power"
+  charge_control_immediate: true
+  has_charge_enable_time: false
+  has_discharge_enable_time: false
+  has_target_soc: false
+  has_reserve_soc: false
+  has_timed_pause: false
   charge_time_format: "S"
+  charge_time_entity_is_option: false
+  soc_units: "%"
+  num_load_entities: 1
+  has_ge_inverter_mode: false
+  has_fox_inverter_mode: false
+  time_button_press: false
+  clock_time_format: "%d-%m-%y %H:%M:%S"
+  write_and_poll_sleep: 2
+  has_time_window: false
+  support_charge_freeze: false
+  support_discharge_freeze: false
+
+balance_inverters_seconds: 0
+
+# Services to control charging/discharging.
+# Each service also turns the opposite mode OFF, so Predbat can never
+# leave both charge and discharge active at the same time.
+charge_start_service:
+- service: input_boolean.turn_on
+  entity_id: input_boolean.predbat_charge_start
+- service: input_boolean.turn_off
+  entity_id: input_boolean.predbat_discharge_start
+charge_stop_service:
+- service: input_boolean.turn_off
+  entity_id: input_boolean.predbat_charge_start
+discharge_start_service:
+- service: input_boolean.turn_on
+  entity_id: input_boolean.predbat_discharge_start
+- service: input_boolean.turn_off
+  entity_id: input_boolean.predbat_charge_start
+discharge_stop_service:
+- service: input_boolean.turn_off
+  entity_id: input_boolean.predbat_discharge_start
+
+charge_rate:
+- number.hanchuess_YOURSERIAL_charge_power_limit
+discharge_rate:
+- number.hanchuess_YOURSERIAL_discharge_power_limit
 
 battery_power:
-  - sensor.hanchuess_YOURSERIAL_battery_power
+- sensor.hanchuess_YOURSERIAL_battery_power
 grid_power:
-  - sensor.hanchuess_YOURSERIAL_grid_power
-soc_percent:
-  - sensor.hanchuess_YOURSERIAL_battery_soc
-battery_min_soc:
-  - number.hanchuess_YOURSERIAL_minimum_discharge_soc
-charge_rate:
-  - number.hanchuess_YOURSERIAL_charge_power_limit
-discharge_rate:
-  - number.hanchuess_YOURSERIAL_discharge_power_limit
+- sensor.hanchuess_YOURSERIAL_grid_power
 
-charge_start_service:
-  - service: input_boolean.turn_on
-    entity_id: input_boolean.predbat_charge_start
-charge_stop_service:
-  - service: input_boolean.turn_off
-    entity_id: input_boolean.predbat_charge_start
-discharge_start_service:
-  - service: input_boolean.turn_on
-    entity_id: input_boolean.predbat_discharge_start
-discharge_stop_service:
-  - service: input_boolean.turn_off
-    entity_id: input_boolean.predbat_discharge_start
+soc_percent:
+- sensor.hanchuess_YOURSERIAL_battery_soc
+# soc_max must be your battery's total usable capacity in kWh
+# (NOT a raw SoC or generic "battery" sensor) — Predbat uses it
+# together with soc_kw to convert between % and kWh.
+soc_max:
+- sensor.hanchuess_YOURSERIAL_battery_capacity_kwh
+soc_kw:
+- sensor.home_battery_state_of_charge_kwh
+
+battery_min_soc:
+- number.hanchuess_YOURSERIAL_minimum_discharge_soc
+
+inverter_limit:
+- 5000
+inverter_limit_charge:
+- 5000
+inverter_limit_discharge:
+- 5000
+inverter_limit_export:
+- 5000
+battery_rate_max:
+- 5000
 ```
+
+Replace `YOURSERIAL` with your inverter's serial as it appears in your entity IDs.
+
+**Note:** double-check `inverter_limit` is spelled exactly like that — a stray accented character (e.g. `é` instead of `e`, easy to get from autocorrect) will make Predbat silently ignore the setting and fall back to its own default rather than your inverter's real limit.
 
 ## Predbat bridge automations
 
