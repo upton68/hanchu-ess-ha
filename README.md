@@ -298,6 +298,20 @@ Replace `YOURSERIAL` with your inverter's serial as it appears in your entity ID
 
 In addition the hardcoded numbered limits above at 5000 are numbered to my own limit requirements. Please adjust these to your own limits.
 
+### 3. Add to configuration.yaml
+
+```
+template:
+- sensor:
+    - name: "Home Battery State of Charge kWh"
+      unique_id: home_battery_soc_kwh
+      unit_of_measurement: "kWh"
+      state_class: measurement
+      device_class: energy
+      state: >
+          {{ ((states('sensor.hanchuess_h0157156p0170_battery_soc') | float(0)) / 100 * 18.8) | round(2) }}
+```
+
 ## Predbat bridge automations
 
 Predbat controls charge/discharge by setting time slots. The recommended approach
