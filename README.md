@@ -309,8 +309,9 @@ template:
       state_class: measurement
       device_class: energy
       state: >
-          {{ ((states('sensor.hanchuess_h0157156p0170_battery_soc') | float(0)) / 100 * 18.8) | round(2) }}
+          {{ ((states('sensor.hanchuess_YOURSERIAL_battery_soc') | float(0)) / 100 * NN.NN) | round(2) }}
 ```
+NN.NN = size of your battery (i.e. 18.80)
 
 ## Predbat bridge automations
 
