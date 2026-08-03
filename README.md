@@ -296,6 +296,8 @@ Replace `YOURSERIAL` with your inverter's serial as it appears in your entity ID
 
 **Note:** double-check `inverter_limit` is spelled exactly like that — a stray accented character (e.g. `é` instead of `e`, easy to get from autocorrect) will make Predbat silently ignore the setting and fall back to its own default rather than your inverter's real limit.
 
+In addition the hardcoded numbered limits above at 5000 are numbered to my own limit requirements. Please adjust these to your own limits.
+
 ## Predbat bridge automations
 
 Predbat controls charge/discharge by setting time slots. The recommended approach
