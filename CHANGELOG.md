@@ -10,6 +10,15 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Fixed
+- **Control sensors now populate automatically on Home Assistant restart.**
+  Discharge Power Limit, Charge Power Limit, Max Charge SOC, Min Discharge SOC,
+  Grid to Battery Max, and Work Mode previously stayed `unavailable` after a
+  restart until the **Read Settings** button was pressed manually. The startup
+  values were already being fetched via `iotGet` during setup, but were never
+  applied to the (not-yet-registered-at-fetch-time) control entities. They're
+  now applied automatically once entity setup completes.
+
 ## [2.0.2] - 2026-08-10
 
 ### Changed
