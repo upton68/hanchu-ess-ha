@@ -592,6 +592,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    if startup_values:
+        from .button import apply_iot_values
+        apply_iot_values(entry, startup_values)
+        _LOGGER.info(
+            "[HANCHUESS] Applied %d startup value(s) to control entities",
+            len(startup_values),
+        )
+
     pending = entry.data.get("pending_devices", [])
     if pending:
         for item in pending:
