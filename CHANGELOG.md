@@ -18,7 +18,17 @@ later versions are tracked here going forward.
   values were already being fetched via `iotGet` during setup, but were never
   applied to the (not-yet-registered-at-fetch-time) control entities. They're
   now applied automatically once entity setup completes.
-
+- **Startup value fetch no longer times out prematurely.** The `iotGet` call
+  that fetches these startup values was wrapped in a fixed 8-second timeout,
+  separate from and shorter than the API client's own per-attempt timeout
+  (15s as of the previous release) — meaning the fetch was very likely to be
+  cut off before it could complete, especially since Hanchu's cloud API
+  response time varies considerably (observed 7s–45s across different
+  restarts). The outer timeout has been removed; the fetch now relies solely
+  on the API client's own internal retry/timeout handling. As a result, HA
+  startup may occasionally take longer than before while this fetch
+  completes, in exchange for it actually succeeding.
+  
 ## [2.0.2] - 2026-08-10
 
 ### Changed
