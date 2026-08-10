@@ -194,19 +194,122 @@ After initial setup, polling intervals and fast charge duration can be adjusted 
 
 ## Predbat Integration
 
-The Hanchu iESS integration works with [Predbat](https://springfall2008.github.io/batpred/) via Predbat's generic Service API, using bridge `input_boolean` helpers that trigger Home Assistant automations. Those automations then call `hanchuess.device_control` to actually start/stop charging and discharging on the inverter.
+The Hanchu iESS integration works with Predbat via Predbat's generic Service API. Predbat calls four service hooks — charge_start_service, charge_stop_service, discharge_start_service, discharge_stop_service — which we point at a single Home Assistant script that writes the corresponding time slots to the device via hanchuess.device_control.
 
 ### 1. Create the bridge helpers
 
-In Home Assistant, create two `input_boolean` helpers:
-- `input_boolean.predbat_charge_start`
-- `input_boolean.predbat_discharge_start`
+In Home Assistant, create three helpers:
 
-Wire up automations that trigger on these turning on/off and call `hanchuess.device_control` (with `response_variable: result` and a check on `result.success`) to actually control the inverter.
+input_boolean.predbat_charge_start
+input_boolean.predbat_discharge_start
+input_text.hanchu_last_mode_action — tracks the last mode successfully applied, so the script can skip a redundant API call when Predbat reasserts a state that's already active (see Skipping redundant calls below).
 
-### 2. apps.yaml configuration
+### 2. Create the bridge script
 
-```yaml
+All four of Predbat's service hooks call the same script, script.hanchu_set_state_queued, passing a mode_action field to say which of the four states to apply. The script runs with mode: queued, so if Predbat ever fires two calls close together — e.g. stopping a discharge and starting a charge in the same plan-evaluation cycle — Home Assistant queues the second one behind the first rather than letting both device_control calls race each other on the wire. (The queue only guarantees the two calls don't run concurrently — it relies on Predbat itself calling stop before start, which is Predbat's normal behaviour during a mode transition.)
+
+Create a new script (Settings → Automations & Scenes → Scripts → Add Script → Edit in YAML) and paste:
+```
+mode: queued
+fields:
+  mode_action:
+    required: true
+    selector:
+      select:
+        options:
+          - charge_start
+          - charge_stop
+          - discharge_start
+          - discharge_stop
+sequence:
+  - variables:
+      # mode_action is sometimes only populated under `data` rather than as a
+      # bare template variable, depending on whether the script is invoked from
+      # the HA "Run script" UI or by a real service call from Predbat's
+      # AppDaemon-based dispatch. Check both so it works reliably either way.
+      act: >-
+        {% if mode_action is defined %}{{ mode_action }}
+        {% elif data is defined and data.mode_action is defined %}{{ data.mode_action }}
+        {% else %}unknown{% endif %}
+  - if:
+      - condition: template
+        value_template: "{{ act == states('input_text.hanchu_last_mode_action') }}"
+    then:
+      - stop: "No change — same action already applied, skipping API call"
+  - variables:
+      start_seconds: "{{ (now() - now().replace(hour=0, minute=0, second=0, microsecond=0)).seconds }}"
+      tct_start: "{{ start_seconds if act == 'charge_start' else 0 }}"
+      tct_end: "{{ 39600 if act == 'charge_start' else 0 }}"      # 11:00:00
+      tdt_start: "{{ start_seconds if act == 'discharge_start' else 0 }}"
+      tdt_end: "{{ 86340 if act == 'discharge_start' else 0 }}"   # 23:59:00
+  - action: hanchuess.device_control
+    data:
+      sn: YOURSERIAL
+      dev_type: "2"
+      value:
+        TCT_START_1: "{{ tct_start }}"
+        TCT_END_1: "{{ tct_end }}"
+        TDT_START_1: "{{ tdt_start }}"
+        TDT_END_1: "{{ tdt_end }}"
+    response_variable: result
+  - if:
+      - condition: template
+        value_template: "{{ not result.success }}"
+    then:
+      - delay:
+          seconds: 5
+      - action: hanchuess.device_control
+        data:
+          sn: YOURSERIAL
+          dev_type: "2"
+          value:
+            TCT_START_1: "{{ tct_start }}"
+            TCT_END_1: "{{ tct_end }}"
+            TDT_START_1: "{{ tdt_start }}"
+            TDT_END_1: "{{ tdt_end }}"
+        response_variable: result2
+      - if:
+          - condition: template
+            value_template: "{{ not result2.success }}"
+        then:
+          - action: notify.notify
+            data:
+              title: "⚠️ Hanchu {{ act }} FAILED"
+              message: >-
+                {{ act }} write failed after retry ({{ result2.message }})
+                — check manually.
+          - stop: "Both attempts failed — leaving last_mode_action unchanged for retry"
+  - action: input_text.set_value
+    target:
+      entity_id: input_text.hanchu_last_mode_action
+    data:
+      value: "{{ act }}"
+  - choose:
+      - conditions: "{{ act == 'charge_start' }}"
+        sequence:
+          - action: input_boolean.turn_on
+            entity_id: input_boolean.predbat_charge_start
+      - conditions: "{{ act == 'charge_stop' }}"
+        sequence:
+          - action: input_boolean.turn_off
+            entity_id: input_boolean.predbat_charge_start
+      - conditions: "{{ act == 'discharge_start' }}"
+        sequence:
+          - action: input_boolean.turn_on
+            entity_id: input_boolean.predbat_discharge_start
+      - conditions: "{{ act == 'discharge_stop' }}"
+        sequence:
+          - action: input_boolean.turn_off
+            entity_id: input_boolean.predbat_discharge_start
+```
+Replace YOURSERIAL and notify.notify (with your actual mobile app notify service) throughout. Note the script always writes all four fields (TCT_START_1/TCT_END_1/TDT_START_1/TDT_END_1) on every call, zeroing whichever pair isn't the active mode — this keeps charge and discharge mutually exclusive on the device without relying on separate stop/start calls landing in the right order.
+
+**Skipping redundant calls**
+
+Predbat re-evaluates its plan on its normal cycle (every 5 minutes by default) and can re-issue the same service call mid-window — e.g. calling discharge_start_service again 30 minutes into an already-active discharge, simply reasserting the plan rather than changing anything. Before this optimisation, each reassertion triggered a full device_control API call to Hanchu's cloud (and visibly nudged the device's recorded start time forward each time). The input_text.hanchu_last_mode_action check above skips the API call entirely when the requested mode is already the last one successfully applied — in testing this cut 3 redundant calls out of a single 2h20m discharge window, with zero change in actual battery behaviour. The tracker only updates after a confirmed successful write, so a failed attempt still retries correctly on the next cycle rather than being silently skipped.
+
+### 3. apps.yaml configuration
+```
 num_inverters: 1
 
 inverter_type: "HC"
@@ -237,25 +340,24 @@ inverter:
 
 balance_inverters_seconds: 0
 
-# Services to control charging/discharging.
-# Each service also turns the opposite mode OFF, so Predbat can never
-# leave both charge and discharge active at the same time.
+# All four hooks call the same queued script (see step 2 above), passing
+# mode_action so it knows which state to apply.
 charge_start_service:
-- service: input_boolean.turn_on
-  entity_id: input_boolean.predbat_charge_start
-- service: input_boolean.turn_off
-  entity_id: input_boolean.predbat_discharge_start
+  - service: script.hanchu_set_state_queued
+    data:
+      mode_action: charge_start
 charge_stop_service:
-- service: input_boolean.turn_off
-  entity_id: input_boolean.predbat_charge_start
+  - service: script.hanchu_set_state_queued
+    data:
+      mode_action: charge_stop
 discharge_start_service:
-- service: input_boolean.turn_on
-  entity_id: input_boolean.predbat_discharge_start
-- service: input_boolean.turn_off
-  entity_id: input_boolean.predbat_charge_start
+  - service: script.hanchu_set_state_queued
+    data:
+      mode_action: discharge_start
 discharge_stop_service:
-- service: input_boolean.turn_off
-  entity_id: input_boolean.predbat_discharge_start
+  - service: script.hanchu_set_state_queued
+    data:
+      mode_action: discharge_stop
 
 charge_rate:
 - number.hanchuess_YOURSERIAL_charge_power_limit
@@ -291,15 +393,13 @@ inverter_limit_export:
 battery_rate_max:
 - 5000
 ```
+Replace YOURSERIAL with your inverter's serial as it appears in your entity IDs.
 
-Replace `YOURSERIAL` with your inverter's serial as it appears in your entity IDs.
-
-**Note:** double-check `inverter_limit` is spelled exactly like that — a stray accented character (e.g. `é` instead of `e`, easy to get from autocorrect) will make Predbat silently ignore the setting and fall back to its own default rather than your inverter's real limit.
+**Note:** double-check inverter_limit is spelled exactly like that — a stray accented character (e.g. é instead of e, easy to get from autocorrect) will make Predbat silently ignore the setting and fall back to its own default rather than your inverter's real limit.
 
 In addition the hardcoded numbered limits above at 5000 are numbered to my own limit requirements. Please adjust these to your own limits.
 
-### 3. Add to configuration.yaml
-
+### 4. Add to configuration.yaml
 ```
 template:
 - sensor:
@@ -312,184 +412,6 @@ template:
           {{ ((states('sensor.hanchuess_YOURSERIAL_battery_soc') | float(0)) / 100 * NN.NN) | round(2) }}
 ```
 NN.NN = size of your battery (i.e. 18.80)
-
-## Predbat bridge automations
-
-Predbat controls charge/discharge by setting time slots. The recommended approach
-uses the `hanchuess.device_control` service directly rather than the individual
-`time.set_value` entity calls — this writes both start and end times to the device
-in a single atomic API call (avoiding any intermediate state where only one of the
-two has been updated), and returns a response you can use to verify the write
-succeeded and retry on failure.
-
-> **Note:** As of v2.0.0, control entities (time slots, Work Mode, number entities)
-> stage changes locally rather than writing immediately — see
-> [Settings management](#settings-management). Automations that need an
-> **immediate, verified write** (like this Predbat bridge) should call
-> `hanchuess.device_control` directly instead, since it bypasses staging entirely
-> and writes straight to the device.
-
-```yaml
-alias: Predbat Bridge - Start Charge
-triggers:
-  - entity_id: input_boolean.predbat_charge_start
-    to: "on"
-    trigger: state
-variables:
-  start_seconds: "{{ (now() - now().replace(hour=0, minute=0, second=0, microsecond=0)).seconds }}"
-  end_seconds: 39600  # 11:00:00
-actions:
-  - action: hanchuess.device_control
-    data:
-      sn: YOURSERIAL
-      dev_type: "2"
-      value:
-        TCT_START_1: "{{ start_seconds }}"
-        TCT_END_1: "{{ end_seconds }}"
-    response_variable: result
-  - if:
-      - condition: template
-        value_template: "{{ not result.success }}"
-    then:
-      - delay:
-          seconds: 5
-      - action: hanchuess.device_control
-        data:
-          sn: YOURSERIAL
-          dev_type: "2"
-          value:
-            TCT_START_1: "{{ start_seconds }}"
-            TCT_END_1: "{{ end_seconds }}"
-        response_variable: result2
-      - if:
-          - condition: template
-            value_template: "{{ not result2.success }}"
-        then:
-          - action: notify.notify
-            data:
-              title: ⚠️ Hanchu charge start FAILED
-              message: >-
-                Charge start/end write failed after retry ({{ result2.message }}) —
-                charge window may not be set, check manually.
-
-alias: Predbat Bridge - Stop Charge
-triggers:
-  - entity_id: input_boolean.predbat_charge_start
-    to: "off"
-    trigger: state
-actions:
-  - action: hanchuess.device_control
-    data:
-      sn: YOURSERIAL
-      dev_type: "2"
-      value:
-        TCT_START_1: 0
-        TCT_END_1: 0
-    response_variable: result
-  - if:
-      - condition: template
-        value_template: "{{ not result.success }}"
-    then:
-      - delay:
-          seconds: 5
-      - action: hanchuess.device_control
-        data:
-          sn: YOURSERIAL
-          dev_type: "2"
-          value:
-            TCT_START_1: 0
-            TCT_END_1: 0
-        response_variable: result2
-      - if:
-          - condition: template
-            value_template: "{{ not result2.success }}"
-        then:
-          - action: notify.notify
-            data:
-              title: ⚠️ Hanchu charge stop FAILED
-              message: "Charge stop write failed after retry ({{ result2.message }}) — check manually."
-
-alias: Predbat Bridge - Start Discharge
-triggers:
-  - entity_id: input_boolean.predbat_discharge_start
-    to: "on"
-    trigger: state
-variables:
-  start_seconds: "{{ (now() - now().replace(hour=0, minute=0, second=0, microsecond=0)).seconds }}"
-  end_seconds: 86340  # 23:59:00
-actions:
-  - action: hanchuess.device_control
-    data:
-      sn: YOURSERIAL
-      dev_type: "2"
-      value:
-        TDT_START_1: "{{ start_seconds }}"
-        TDT_END_1: "{{ end_seconds }}"
-    response_variable: result
-  - if:
-      - condition: template
-        value_template: "{{ not result.success }}"
-    then:
-      - delay:
-          seconds: 5
-      - action: hanchuess.device_control
-        data:
-          sn: YOURSERIAL
-          dev_type: "2"
-          value:
-            TDT_START_1: "{{ start_seconds }}"
-            TDT_END_1: "{{ end_seconds }}"
-        response_variable: result2
-      - if:
-          - condition: template
-            value_template: "{{ not result2.success }}"
-        then:
-          - action: notify.notify
-            data:
-              title: ⚠️ Hanchu discharge start FAILED
-              message: >-
-                Discharge start/end write failed after retry ({{ result2.message }}) —
-                discharge window may not be set, check manually.
-
-alias: Predbat Bridge - Stop Discharge
-triggers:
-  - entity_id: input_boolean.predbat_discharge_start
-    to: "off"
-    trigger: state
-actions:
-  - action: hanchuess.device_control
-    data:
-      sn: YOURSERIAL
-      dev_type: "2"
-      value:
-        TDT_START_1: 0
-        TDT_END_1: 0
-    response_variable: result
-  - if:
-      - condition: template
-        value_template: "{{ not result.success }}"
-    then:
-      - delay:
-          seconds: 5
-      - action: hanchuess.device_control
-        data:
-          sn: YOURSERIAL
-          dev_type: "2"
-          value:
-            TDT_START_1: 0
-            TDT_END_1: 0
-        response_variable: result2
-      - if:
-          - condition: template
-            value_template: "{{ not result2.success }}"
-        then:
-          - action: notify.notify
-            data:
-              title: ⚠️ Hanchu discharge stop FAILED
-              message: "Discharge stop write failed after retry ({{ result2.message }}) — check manually."
-```
-
-Replace `YOURSERIAL` and `notify.notify` (with your actual mobile app notify service) throughout. This pattern retries once on failure and sends a notification if both attempts fail, so a failed write is never silent.
 
 ## Development
 
