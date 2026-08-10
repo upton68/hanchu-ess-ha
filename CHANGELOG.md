@@ -10,6 +10,13 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-08-10
+
+### Changed
+- **HanchuessApiClient now reuses Home Assistant's shared aiohttp session** (via async_get_clientsession) instead of opening a new ClientSession per request, and the per-attempt request timeout is increased from 10s to 15s. Reduces spurious timeouts and retries during periods of slow response from Hanchu's cloud API — in testing, writes that previously needed 2–3 attempts now mostly land on the first try. HanchuessApiClient.__init__ now requires hass as its first argument (internal API change; only affects direct users of the client class, not the integration's public services/entities).
+- **Predbat bridge automations replaced with a single queued script.** Previously, Predbat's four service hooks each triggered a separate HA automation making its own independent hanchuess.device_control call, with no guarantee against two calls (e.g. a discharge-stop and charge-start landing in the same Predbat cycle) racing each other and being rejected by Hanchu's server. All four hooks now call one script running with mode: queued, so calls are serialised rather than racing. See the Predbat Integration section for the updated setup.
+- **Predbat bridge script now skips redundant writes.** When Predbat re-asserts a charge/discharge state that's already active (which it does routinely on its normal plan-evaluation cycle), the bridge script now detects this via a new input_text.hanchu_last_mode_action helper and skips the device_control call entirely, rather than sending an unnecessary write to Hanchu's cloud API on every cycle.
+
 ## [2.0.1] - 2026-07-16
 
 ### Fixed
@@ -267,7 +274,8 @@ act on it straight away must now call `hanchuess.write_settings` after the write
 - Initial fork of the original integration with read-only battery, grid, PV, and
   load sensors and the custom Lovelace card.
 
-[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.2...HEAD
+[2.0.2]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/upton68/hanchu-ess-ha/compare/v1.4.1...v2.0.0
 [1.4.1]: https://github.com/upton68/hanchu-ess-ha/compare/v1.4.0...v1.4.1
