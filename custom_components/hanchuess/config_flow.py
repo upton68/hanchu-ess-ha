@@ -51,7 +51,7 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         errors = {}
         if user_input is not None:
-            client = HanchuessApiClient(BASE_URL)
+            client = HanchuessApiClient(self.hass, BASE_URL)
             token = await client.async_login(
                 user_input["account"], user_input["password"]
             )
@@ -101,7 +101,7 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(inverter_serial_number)
                 self._abort_if_unique_id_configured()
 
-                client = self._client or HanchuessApiClient(BASE_URL, token=self._token)
+                client = self._client or HanchuessApiClient(self.hass, BASE_URL, token=self._token)
                 self._client = client
 
                 language = self.hass.config.language or "en"
@@ -193,7 +193,7 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Re-authenticate with user credentials."""
         errors = {}
         if user_input is not None:
-            client = HanchuessApiClient(BASE_URL)
+            client = HanchuessApiClient(self.hass, BASE_URL)
             token = await client.async_login(
                 user_input["account"], user_input["password"]
             )

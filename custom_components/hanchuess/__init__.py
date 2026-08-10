@@ -501,6 +501,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
 
     if "_client" not in hass.data[DOMAIN]:
         hass.data[DOMAIN]["_client"] = HanchuessApiClient(
+            hass,
             domain=BASE_URL,
             token=entry.data.get("token"),
         )

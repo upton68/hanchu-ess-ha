@@ -5,6 +5,8 @@ import time
 import aiohttp
 import async_timeout
 
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
 from .crypto import _encrypt_payload
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,7 +22,8 @@ class ReauthRequired(Exception):
 class HanchuessApiClient:
     """Hanchuess API client."""
 
-    def __init__(self, domain: str, token: str = None):
+    def __init__(self, hass, domain: str, token: str = None):
+        self._hass = hass
         self._domain = domain.rstrip("/")
         self._token = token
         self._token_time = time.time() if token else 0
@@ -65,22 +68,20 @@ class HanchuessApiClient:
                     headers.pop("Content-Type", None)
                     request_kwargs = {"data": data}
 
-                async with async_timeout.timeout(10):
-                    async with aiohttp.ClientSession(
-                        connector=aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
-                    ) as session:
-                        async with session.post(
-                            url, headers=headers, **request_kwargs
-                        ) as response:
-                            result = await response.json(content_type=None)
-                            _LOGGER.debug("[HANCHUESS] response: %s status=%s body=%s", path, response.status, str(result)[:500])
-                            if response.status == 401:
+                async with async_timeout.timeout(15):
+                    session = async_get_clientsession(self._hass)
+                    async with session.post(
+                        url, headers=headers, **request_kwargs
+                    ) as response:
+                        result = await response.json(content_type=None)
+                        _LOGGER.debug("[HANCHUESS] response: %s status=%s body=%s", path, response.status, str(result)[:500])
+                        if response.status == 401:
+                            return {"success": False, "code": 401}
+                        if response.status == 200:
+                            if result.get("code") == 401:
                                 return {"success": False, "code": 401}
-                            if response.status == 200:
-                                if result.get("code") == 401:
-                                    return {"success": False, "code": 401}
-                                return result
-                            _LOGGER.error("[HANCHUESS] unexpected status: %s %s", response.status, str(result)[:200])
+                            return result
+                        _LOGGER.error("[HANCHUESS] unexpected status: %s %s", response.status, str(result)[:200])
             except TimeoutError:
                 last_err = "timeout"
                 _LOGGER.warning("[HANCHUESS] Request timeout (attempt %s/%s): %s", attempt, retries, url)
