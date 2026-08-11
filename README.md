@@ -200,9 +200,9 @@ The Hanchu iESS integration works with Predbat via Predbat's generic Service API
 
 In Home Assistant, create three helpers:
 
-  input_boolean.predbat_charge_start
-  input_boolean.predbat_discharge_start
-  input_text.hanchu_last_mode_action — tracks the last mode successfully applied, so the script can skip a redundant API call when Predbat reasserts a state that's already active (see Skipping redundant calls below).
+- input_boolean.predbat_charge_start
+- input_boolean.predbat_discharge_start
+- input_text.hanchu_last_mode_action — tracks the last mode successfully applied, so the script can skip a redundant API call when Predbat reasserts a state that's already active (see Skipping redundant calls below).
 
 ### 2. Create the bridge script
 
