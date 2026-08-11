@@ -550,33 +550,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
     except Exception as err:
         _LOGGER.warning("[HANCHUESS] Could not fetch menu for number limits, using defaults: %s", err)
 
-    # Fetch all current values in one iotGet call with timeout
+    # Fetch all current values in one iotGet call — relies on the API
+    # client's own internal retry/timeout handling (see api.py)
     startup_values = {}
     try:
-        startup_values = await asyncio.wait_for(
-            client.async_iot_get(
-                inverter_serial_number,
-                "2",
-                [
-                    "WORK_MODE_CMB",
-                    "CHG_PWR_LMT",
-                    "DSCHG_PWR_LMT",
-                    "CHG_BAT_SOC_LMT",
-                    "DSCHG_BAT_SOC_LMT",
-                    "DTU_AC_CHG_SOC_LMT",
-                    "TCT_START_1", "TCT_END_1",
-                    "TCT_START_2", "TCT_END_2",
-                    "TCT_START_3", "TCT_END_3",
-                    "TDT_START_1", "TDT_END_1",
-                    "TDT_START_2", "TDT_END_2",
-                    "TDT_START_3", "TDT_END_3",
-                ]
-            ),
-            timeout=8.0
+        startup_values = await client.async_iot_get(
+            inverter_serial_number,
+            "2",
+            [
+                "WORK_MODE_CMB",
+                "CHG_PWR_LMT",
+                "DSCHG_PWR_LMT",
+                "CHG_BAT_SOC_LMT",
+                "DSCHG_BAT_SOC_LMT",
+                "DTU_AC_CHG_SOC_LMT",
+                "TCT_START_1", "TCT_END_1",
+                "TCT_START_2", "TCT_END_2",
+                "TCT_START_3", "TCT_END_3",
+                "TDT_START_1", "TDT_END_1",
+                "TDT_START_2", "TDT_END_2",
+                "TDT_START_3", "TDT_END_3",
+            ]
         )
         _LOGGER.info("[HANCHUESS] Startup values fetched: %s", startup_values)
-    except asyncio.TimeoutError:
-        _LOGGER.warning("[HANCHUESS] Startup iotGet timed out, entities will populate on next poll")
     except Exception as err:
         _LOGGER.warning("[HANCHUESS] Could not fetch startup values: %s", err)
 
@@ -591,6 +587,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    if startup_values:
+        from .button import apply_iot_values
+        apply_iot_values(entry, startup_values)
+        _LOGGER.info(
+            "[HANCHUESS] Applied %d startup value(s) to control entities",
+            len(startup_values),
+        )
 
     pending = entry.data.get("pending_devices", [])
     if pending:
