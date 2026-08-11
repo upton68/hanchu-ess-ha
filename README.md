@@ -308,6 +308,11 @@ Replace YOURSERIAL and notify.notify (with your actual mobile app notify service
 
 Predbat re-evaluates its plan on its normal cycle (every 5 minutes by default) and can re-issue the same service call mid-window — e.g. calling discharge_start_service again 30 minutes into an already-active discharge, simply reasserting the plan rather than changing anything. Before this optimisation, each reassertion triggered a full device_control API call to Hanchu's cloud (and visibly nudged the device's recorded start time forward each time). The input_text.hanchu_last_mode_action check above skips the API call entirely when the requested mode is already the last one successfully applied — in testing this cut 3 redundant calls out of a single 2h20m discharge window, with zero change in actual battery behaviour. The tracker only updates after a confirmed successful write, so a failed attempt still retries correctly on the next cycle rather than being silently skipped.
 
+**Behaviour on Predbat restart**
+
+Whenever the Predbat add-on itself restarts — whether from a Home Assistant restart, updating the Hanchuess integration, or updating Predbat itself — Predbat typically issues both charge_stop_service and discharge_stop_service in quick succession as it comes back up. This is Predbat putting the inverter into a known, neutral state before resuming normal plan-driven control, rather than trusting whatever state it was left in. It's expected behaviour, not a fault in the integration or the bridge script.
+The queued script handles this cleanly: if input_text.hanchu_last_mode_action already matches one of the two calls (e.g. the device was already in charge_stop), that call is skipped as redundant; the other genuinely runs if it represents a real change. You may see one or both of charge_stop/discharge_stop fire immediately after any restart — this is normal and requires no action.
+
 ### 3. apps.yaml configuration
 ```
 num_inverters: 1
