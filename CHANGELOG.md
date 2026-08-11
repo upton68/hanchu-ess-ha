@@ -10,6 +10,8 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-08-11
+
 ### Fixed
 - **Control sensors now populate automatically on Home Assistant restart.**
   Discharge Power Limit, Charge Power Limit, Max Charge SOC, Min Discharge SOC,
@@ -293,7 +295,8 @@ act on it straight away must now call `hanchuess.write_settings` after the write
 - Initial fork of the original integration with read-only battery, grid, PV, and
   load sensors and the custom Lovelace card.
 
-[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.2...HEAD
+[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.3...HEAD
+[2.0.3]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/upton68/hanchu-ess-ha/compare/v1.4.1...v2.0.0
