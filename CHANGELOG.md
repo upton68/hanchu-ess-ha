@@ -10,6 +10,27 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.0.4] - 2026-09-09
+
+### Fixed
+- **Battery sensors no longer go `unavailable` on Home Assistant 2026.9+.**
+  `BatterySensor.device_info` linked each battery pack device to its parent
+  inverter using the deprecated `via_device` parameter. HA 2026.9 turned this
+  from a deprecation warning into a hard `RuntimeError` for calls that HA's
+  own `entity_platform` makes on an integration's behalf (no integration
+  frame is left on the stack for HA to attribute the warning to, so it falls
+  back to raising), which aborted battery entity creation entirely. The
+  inverter device is now explicitly registered during `async_setup_entry`
+  and its registry id is passed to battery entities via `via_device_id`.
+
+### Changed
+- **Minimum supported Home Assistant version is now 2026.8.0** (was
+  unbounded/untested below that). `via_device_id` on `DeviceInfo` and
+  `device_registry.async_get_or_create()` was only introduced in 2026.8,
+  so this integration requires it going forward. On HA versions prior to
+  2026.9 this change is a no-op safety net; the fix itself only matters on
+  2026.9+.
+
 ## [2.0.3] - 2026-08-11
 
 ### Fixed
@@ -295,7 +316,8 @@ act on it straight away must now call `hanchuess.write_settings` after the write
 - Initial fork of the original integration with read-only battery, grid, PV, and
   load sensors and the custom Lovelace card.
 
-[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.3...HEAD
+[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.4...HEAD
+[2.0.4]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.3...v2.0.4
 [2.0.3]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.0...v2.0.1
