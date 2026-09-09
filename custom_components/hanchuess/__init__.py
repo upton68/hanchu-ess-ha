@@ -8,6 +8,7 @@ from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.components import websocket_api
 from homeassistant.exceptions import ConfigEntryNotReady
+import homeassistant.helpers.device_registry as dr
 import homeassistant.helpers.config_validation as cv
 from .const import DOMAIN, PLATFORMS, BASE_URL
 from .api import HanchuessApiClient
@@ -44,6 +45,7 @@ class HanchuessData:
     startup_values: dict
     staging: SettingsStagingBuffer
     control_registry: dict  # control_key -> entity, populated by async_added_to_hass
+    inverter_device_id: str 
 
 
 type HanchuessConfigEntry = ConfigEntry[HanchuessData]
@@ -575,6 +577,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
         _LOGGER.info("[HANCHUESS] Startup values fetched: %s", startup_values)
     except Exception as err:
         _LOGGER.warning("[HANCHUESS] Could not fetch startup values: %s", err)
+        
+    device_registry = dr.async_get(hass)
+    inverter_device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, inverter_serial_number)},
+        name=f"Hanchuess {inverter_serial_number}",
+        manufacturer="Hanchu",
+        model="ESS Device",
+    )
 
     entry.runtime_data = HanchuessData(
         realtime=coordinator,
@@ -584,6 +595,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
         startup_values=startup_values,
         staging=SettingsStagingBuffer(),
         control_registry={},
+        inverter_device_id=inverter_device.id,
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
