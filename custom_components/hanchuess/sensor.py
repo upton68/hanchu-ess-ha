@@ -549,7 +549,7 @@ class BatterySensor(CoordinatorEntity, SensorEntity):
         inverter_serial_number = self._entry.data["sn"]
         return DeviceInfo(
             identifiers={(DOMAIN, self._battery_serial)},
-            via_device=(DOMAIN, inverter_serial_number),
+            via_device_id=self._entry.runtime_data.inverter_device_id,
             name=f"Hanchuess Battery {self._battery_serial}",
             manufacturer="Hanchu",
             model="Battery Pack",
