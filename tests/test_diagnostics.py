@@ -58,6 +58,7 @@ def _make_runtime_data(**overrides):
         "startup_values": {},
         "staging": SettingsStagingBuffer(),
         "control_registry": {},
+        "inverter_device_id": "test_inverter_device_id",
     }
     defaults.update(overrides)
     return HanchuessData(**defaults)
