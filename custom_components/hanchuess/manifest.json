@@ -5,7 +5,6 @@
     "config_flow": true,
     "dependencies": ["frontend", "http", "websocket_api"],
     "documentation": "https://github.com/upton68/hanchu-ess-ha",
-    "homeassistant": "2026.8.0",
     "integration_type": "device",
     "iot_class": "cloud_polling",
     "issue_tracker": "https://github.com/upton68/hanchu-ess-ha/issues",
