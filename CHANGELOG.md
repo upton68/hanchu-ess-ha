@@ -10,6 +10,14 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.0.5] - 2026-09-10
+
+### Fixed
+- Test suite: `tests/test_diagnostics.py`'s `_make_runtime_data()` helper didn't
+  supply `inverter_device_id`, which `HanchuessData` started requiring in 2.0.4
+  (the `via_device_id` fix). No functional change to the integration itself —
+  test-only fix.
+
 ## [2.0.4] - 2026-09-09
 
 ### Fixed
@@ -317,6 +325,7 @@ act on it straight away must now call `hanchuess.write_settings` after the write
   load sensors and the custom Lovelace card.
 
 [Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.4...HEAD
+[2.0.5]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.4...v2.0.5
 [2.0.4]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.3...v2.0.4
 [2.0.3]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.1...v2.0.2
