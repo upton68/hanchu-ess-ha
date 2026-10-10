@@ -10,6 +10,18 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Fixed
+- Energy card auto-registration could wipe all other dashboard resources on
+  startup ([#41](https://github.com/upton68/hanchu-ess-ha/issues/41)). Home
+  Assistant loads the storage-mode Lovelace resource collection lazily; if this
+  integration set up before anything else had loaded it (most likely on a slow
+  startup), it saw an empty list and saved `.storage/lovelace_resources` with
+  only the energy card in it. The collection is now loaded first via
+  `async_get_info()`. On newer Home Assistant versions, which load the
+  collection inside `async_create_item()` themselves, the same race would have
+  added a duplicate card entry instead; that is fixed too. Thanks to
+  @adexandros for the diagnosis.
+
 ## [2.0.5] - 2026-09-10
 
 ### Fixed
