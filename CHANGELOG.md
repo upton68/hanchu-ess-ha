@@ -10,6 +10,8 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.0.6] - 2026-10-10
+
 ### Fixed
 - Energy card auto-registration could wipe all other dashboard resources on
   startup ([#41](https://github.com/upton68/hanchu-ess-ha/issues/41)). Home
@@ -336,7 +338,8 @@ act on it straight away must now call `hanchuess.write_settings` after the write
 - Initial fork of the original integration with read-only battery, grid, PV, and
   load sensors and the custom Lovelace card.
 
-[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.4...HEAD
+[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.6...HEAD
+[2.0.6]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.5...v2.0.6
 [2.0.5]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.4...v2.0.5
 [2.0.4]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.3...v2.0.4
 [2.0.3]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.2...v2.0.3
