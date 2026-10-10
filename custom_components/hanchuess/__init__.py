@@ -482,21 +482,34 @@ async def ws_clear_staging(hass, connection, msg):
     connection.send_result(msg["id"], {})
 
 
+async def _async_register_card_resource(hass: HomeAssistant) -> None:
+    """Add the energy card to the Lovelace resources if it isn't there already.
+
+    The storage-mode resource collection is loaded lazily, and this can run
+    during startup before anything else has touched it. Until it is loaded,
+    async_items() returns an empty list, so the card looks missing; on older
+    HA versions async_create_item() would then save a one-item list over
+    .storage/lovelace_resources, wiping every other resource (issue #41).
+    async_get_info() is the public method HA uses to force that load, so
+    call it before reading or changing the collection.
+    """
+    lovelace_data = hass.data.get("lovelace")
+    if not lovelace_data or lovelace_data.resource_mode != "storage":
+        return
+    resources = lovelace_data.resources
+    await resources.async_get_info()  # forces the lazy load from storage
+    if any("hanchuess-energy-card" in r.get("url", "") for r in resources.async_items()):
+        return
+    await resources.async_create_item({"res_type": "module", "url": CARD_URL})
+    _LOGGER.info("[HANCHUESS] Card resource auto-registered")
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
     if not hass.data[DOMAIN].get("_card_registered"):
         try:
-            lovelace_data = hass.data.get("lovelace")
-            if lovelace_data and lovelace_data.resource_mode == "storage":
-                resources = lovelace_data.resources
-                existing = [r for r in resources.async_items() if "hanchuess-energy-card" in r.get("url", "")]
-                if not existing:
-                    await resources.async_create_item({
-                        "res_type": "module",
-                        "url": CARD_URL,
-                    })
-                    _LOGGER.info("[HANCHUESS] Card resource auto-registered")
+            await _async_register_card_resource(hass)
             hass.data[DOMAIN]["_card_registered"] = True
         except Exception as err:
             _LOGGER.warning("[HANCHUESS] Card resource auto-register failed: %s", err)
