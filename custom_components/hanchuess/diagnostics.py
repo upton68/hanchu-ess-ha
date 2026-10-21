@@ -66,6 +66,17 @@ async def async_get_config_entry_diagnostics(
         TO_REDACT,
     )
     diag["number_limits"] = store.number_limits
+    model = getattr(store, "inverter_model", None)
+    diag["inverter_model"] = (
+        {
+            "dev_model": model.code,
+            "name": model.name,
+            "ac_rating_w": model.ac_rating_w,
+            "battery_max_w": model.battery_max_w,
+        }
+        if model is not None
+        else {"dev_model": (getattr(store.realtime, "data", None) or {}).get("devModel"), "name": None}
+    )
     diag["startup_values"] = async_redact_data(
         store.startup_values or {}, TO_REDACT
     )

@@ -10,6 +10,26 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Added
+- Inverter model detection. The model code (`devModel`) from `getDeviceStatus`
+  is looked up in a table of all 32 Hanchu inverter models, taken from the
+  Hanchu web console's own mapping, with power ratings from Hanchu's manuals.
+  - The device card shows the real model name (e.g. HESS-HY-S-5.0K) instead of
+    "ESS Device".
+  - New diagnostic sensors: **Inverter Model**, **Rated AC Power** and
+    **Battery Power Maximum**. These give Predbat users the right
+    `inverter_limit` and `battery_rate_max`, which differ on single-phase
+    3.0K–6.0K units.
+  - Diagnostics now include the identified model.
+
+### Changed
+- The maximum for Charge and Discharge Power Limit now comes from the model
+  table when the model is known. The cloud menu offers a single 0–5000 W range
+  for the whole single-phase range, which capped 7, 8 and 10 kW single-phase
+  inverters at 5000 W. A warning is logged when the table and the menu
+  disagree. Unrecognised models, and models whose battery maximum isn't
+  documented, keep the menu values.
+
 ## [2.0.6] - 2026-10-10
 
 ### Fixed

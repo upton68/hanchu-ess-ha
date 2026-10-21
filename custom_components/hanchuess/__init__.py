@@ -13,6 +13,12 @@ import homeassistant.helpers.config_validation as cv
 from .const import DOMAIN, PLATFORMS, BASE_URL
 from .api import HanchuessApiClient
 from .battery import merge_battery_serials
+from .models import (
+    DEFAULT_MODEL_NAME,
+    InverterModel,
+    apply_model_power_limits,
+    lookup_inverter_model,
+)
 from .coordinator import (
     HanchuessRealtimeCoordinator,
     HanchuessStatisticsCoordinator,
@@ -45,7 +51,9 @@ class HanchuessData:
     startup_values: dict
     staging: SettingsStagingBuffer
     control_registry: dict  # control_key -> entity, populated by async_added_to_hass
-    inverter_device_id: str 
+    inverter_device_id: str
+    # Resolved from getDeviceStatus devModel; None if missing or unknown.
+    inverter_model: InverterModel | None = None
 
 
 type HanchuessConfigEntry = ConfigEntry[HanchuessData]
@@ -565,6 +573,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
     except Exception as err:
         _LOGGER.warning("[HANCHUESS] Could not fetch menu for number limits, using defaults: %s", err)
 
+    # Identify the inverter model from getDeviceStatus devModel. The menu's
+    # power entry is shared across the whole single-phase range (0-5000 for
+    # 3 kW to 10 kW alike), so where the model table knows the battery
+    # maximum it overrides the menu. Unknown codes keep the menu values.
+    dev_model = (coordinator.data or {}).get("devModel")
+    inverter_model = lookup_inverter_model(dev_model)
+    if inverter_model is None:
+        _LOGGER.info(
+            "[HANCHUESS] Inverter model not recognised (devModel=%r); "
+            "using menu power limits",
+            dev_model,
+        )
+    else:
+        _LOGGER.info(
+            "[HANCHUESS] Inverter model %s (devModel=%s): AC rating %s W, "
+            "battery max %s W",
+            inverter_model.name,
+            inverter_model.code,
+            inverter_model.ac_rating_w,
+            inverter_model.battery_max_w,
+        )
+        for signal, menu_max, table_max in apply_model_power_limits(
+            number_limits, inverter_model
+        ):
+            _LOGGER.warning(
+                "[HANCHUESS] %s maximum set to %s W for %s (the cloud menu "
+                "reports %s W). If writes above the menu value are rejected, "
+                "please report it.",
+                signal,
+                table_max,
+                inverter_model.name,
+                menu_max,
+            )
+
     # Fetch all current values in one iotGet call — relies on the API
     # client's own internal retry/timeout handling (see api.py)
     startup_values = {}
@@ -597,7 +639,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
         identifiers={(DOMAIN, inverter_serial_number)},
         name=f"Hanchuess {inverter_serial_number}",
         manufacturer="Hanchu",
-        model="ESS Device",
+        model=inverter_model.name if inverter_model else DEFAULT_MODEL_NAME,
     )
 
     entry.runtime_data = HanchuessData(
@@ -609,6 +651,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
         staging=SettingsStagingBuffer(),
         control_registry={},
         inverter_device_id=inverter_device.id,
+        inverter_model=inverter_model,
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

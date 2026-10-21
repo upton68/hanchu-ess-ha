@@ -19,6 +19,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity import DeviceInfo
+from .models import inverter_model_name
 from .const import DOMAIN
 from . import HanchuessConfigEntry
 
@@ -469,6 +470,14 @@ async def async_setup_entry(
     async_add_entities(entities)
     # Add the pending settings count sensor (no coordinator — driven by staging buffer)
     async_add_entities([HanchuessSettingsPendingSensor(entry)])
+    # Static model/rating sensors, resolved once at setup from devModel
+    async_add_entities(
+        [
+            HanchuessModelSensor(entry, "inverter_model"),
+            HanchuessModelSensor(entry, "rated_ac_power"),
+            HanchuessModelSensor(entry, "battery_power_max"),
+        ]
+    )
 
 
 class HanchueSensor(CoordinatorEntity, SensorEntity):
@@ -500,7 +509,7 @@ class HanchueSensor(CoordinatorEntity, SensorEntity):
             identifiers={(DOMAIN, inverter_serial_number)},
             name=f"Hanchuess {inverter_serial_number}",
             manufacturer="Hanchu",
-            model="ESS Device",
+            model=inverter_model_name(self._entry),
         )
 
     @property
@@ -589,7 +598,7 @@ class DeviceStatusSensor(CoordinatorEntity, SensorEntity):
             identifiers={(DOMAIN, inverter_serial_number)},
             name=f"Hanchuess {inverter_serial_number}",
             manufacturer="Hanchu",
-            model="ESS Device",
+            model=inverter_model_name(self._entry),
         )
 
     @property
@@ -680,5 +689,82 @@ class HanchuessSettingsPendingSensor(SensorEntity):
             identifiers={(DOMAIN, inverter_serial_number)},
             name=f"Hanchuess {inverter_serial_number}",
             manufacturer="Hanchu",
-            model="ESS Device",
+            model=inverter_model_name(self._entry),
         )
+
+
+_MODEL_SENSORS = {
+    "inverter_model": {
+        "name": "Inverter Model",
+        "icon": "mdi:information-outline",
+    },
+    "rated_ac_power": {
+        "name": "Rated AC Power",
+        "icon": "mdi:flash",
+        "attr": "ac_rating_w",
+    },
+    "battery_power_max": {
+        "name": "Battery Power Maximum",
+        "icon": "mdi:battery-arrow-up-outline",
+        "attr": "battery_max_w",
+    },
+}
+
+
+class HanchuessModelSensor(SensorEntity):
+    """Static diagnostic sensors describing the identified inverter model.
+
+    Values come from the model table in models.py, looked up once at setup
+    from getDeviceStatus devModel. Rated AC Power is what Predbat calls
+    inverter_limit; Battery Power Maximum is its battery_rate_max. They
+    differ on single-phase 3.0K-6.0K units, whose battery stage is capped
+    at 5000 W. All three read unknown if the model isn't recognised.
+    """
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_should_poll = False
+
+    def __init__(self, entry, sensor_key: str) -> None:
+        self._entry = entry
+        self._sensor_key = sensor_key
+        config = _MODEL_SENSORS[sensor_key]
+        self._attr_name = config["name"]
+        self._attr_icon = config["icon"]
+        self._value_attr = config.get("attr")
+        self._attr_unique_id = f"{entry.data['sn']}_{sensor_key}"
+        if self._value_attr:
+            self._attr_device_class = SensorDeviceClass.POWER
+            self._attr_native_unit_of_measurement = UnitOfPower.WATT
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        inverter_serial_number = self._entry.data["sn"]
+        return DeviceInfo(
+            identifiers={(DOMAIN, inverter_serial_number)},
+            name=f"Hanchuess {inverter_serial_number}",
+            manufacturer="Hanchu",
+            model=inverter_model_name(self._entry),
+        )
+
+    @property
+    def _model(self):
+        return getattr(self._entry.runtime_data, "inverter_model", None)
+
+    @property
+    def native_value(self):
+        model = self._model
+        if model is None:
+            return None
+        if self._value_attr is None:
+            return model.name
+        return getattr(model, self._value_attr)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        model = self._model
+        if model is not None:
+            return {"dev_model": model.code}
+        realtime = getattr(self._entry.runtime_data, "realtime", None)
+        data = getattr(realtime, "data", None) or {}
+        return {"dev_model": data.get("devModel")}

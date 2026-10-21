@@ -26,11 +26,12 @@ This fork extends the original guoxiatech/hanchu-ess-ha integration — publishe
 - Daily Load/PV Energy (kWh)
 - Daily DG Energy (kWh) — only available when generator support is present
 - Device Status (online/offline/pending)
+- Inverter Model, Rated AC Power (W) and Battery Power Maximum (W), diagnostic, see [Inverter model detection](#inverter-model-detection)
 
 ### Controls (fully automatable)
 - **Work Mode** — Self-consumption, Backup Energy, User-defined, Off-grid
-- **Charge Power Limit**
-- **Discharge Power Limit**
+- **Charge Power Limit** (maximum set from your inverter model, see below)
+- **Discharge Power Limit** (maximum set from your inverter model, see below)
 - **Maximum Charge SOC** (50–100%)
 - **Minimum Discharge SOC** (5–45%)
 - **Grid to Battery Charge Maximum** (20–100%)
@@ -52,6 +53,28 @@ avoiding Hanchu's rate limiter.
   retry also fails, leaving the buffer intact to retry later.
 - **Pending Changes** sensor — shows the count of staged-but-unwritten
   changes (0 when clean). Useful for dashboards and automations.
+
+### Inverter model detection
+
+At startup the integration reads the inverter's model code (`devModel`) from the cloud and looks it up in a table of Hanchu models. This is the same mapping the Hanchu web console uses. The result is used to:
+
+- **Show the real model name** on the device card (e.g. HESS-HY-S-5.0K) instead of "ESS Device".
+- **Set the maximum for Charge and Discharge Power Limit.** The cloud's settings menu gives one 0–5000 W range for the whole single-phase range, so on its own it can't tell a 5 kW inverter from a 10 kW one.
+- **Provide three diagnostic sensors:** Inverter Model, Rated AC Power and Battery Power Maximum.
+
+Battery power and AC rating aren't always the same, which matters for Predbat:
+
+| Inverter | Battery Power Maximum | Rated AC Power |
+|---|---|---|
+| Single-phase HESS-HY-S-3.0K / 3.68K / 4.0K / 5.0K / 6.0K | 5000 W | 3000 / 3680 / 4000 / 5000 / 6000 W |
+| Single-phase HESS-HY-S-7.0K / 8.0K / 10.0K | Same as AC | 7000 / 8000 / 10000 W |
+| Three-phase HESS-HY-T and commercial CESS-HY models | Same as AC | Model rating |
+
+For Predbat, **Battery Power Maximum** is the value for `battery_rate_max`, and **Rated AC Power** is the value for `inverter_limit`.
+
+If the model code isn't recognised, or the model's battery maximum isn't documented (the 48 V HESS-HY-S-6K-S / 12K-S), the power limits fall back to the cloud menu values, as before, and the three sensors show as unknown. If you have a model that isn't recognised, please open an issue with your diagnostics file, which includes the model code.
+
+> **7, 8 and 10 kW single-phase owners:** your power limits can now go above 5000 W, matching your inverter's rating. A warning is logged at startup when the model table and the cloud menu disagree. If the inverter rejects a value above 5000 W, please report it.
 
 ## Services
 
@@ -219,7 +242,7 @@ This integration supports Home Assistant's built-in diagnostics download. To dow
 1. Go to **Settings → Devices & Services**
 2. Find the Hanchuess integration and click **three dots → Download diagnostics**
 
-The report includes system information, integration config, live device state, statistics, and battery payload metadata. The following sensitive fields are automatically redacted:
+The report includes system information, integration config, live device state, statistics, battery payload metadata, and the identified inverter model. The following sensitive fields are automatically redacted:
 
 `token`, `account`, `password`, `sn`, `stationId`, `username`, `pwd`, `unique_id`, `title`, `devId`, `deviceId`, `battery_serials`
 
