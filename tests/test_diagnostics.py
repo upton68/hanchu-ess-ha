@@ -95,6 +95,7 @@ async def test_full_diagnostics_includes_all_sections():
         "statistics",
         "battery",
         "number_limits",
+        "inverter_model",
         "startup_values",
     }
     assert diag["device_status"] == {"batSoc": 55, "loadPwr": 800}
@@ -187,3 +188,29 @@ async def test_device_diagnostics_delegates_to_entry_diagnostics():
     device_diag = await async_get_device_diagnostics(hass, entry, device)
 
     assert device_diag == entry_diag
+
+
+async def test_diagnostics_reports_identified_inverter_model():
+    from custom_components.hanchuess.models import lookup_inverter_model
+
+    entry = _FakeEntry()
+    entry.runtime_data = _make_runtime_data(
+        realtime=SimpleNamespace(data={"devModel": "4"}),
+        inverter_model=lookup_inverter_model("4"),
+    )
+    diag = await async_get_config_entry_diagnostics(MagicMock(), entry)
+    assert diag["inverter_model"] == {
+        "dev_model": 4,
+        "name": "HESS-HY-S-5.0K",
+        "ac_rating_w": 5000,
+        "battery_max_w": 5000,
+    }
+
+
+async def test_diagnostics_reports_unrecognised_dev_model():
+    entry = _FakeEntry()
+    entry.runtime_data = _make_runtime_data(
+        realtime=SimpleNamespace(data={"devModel": "99"}),
+    )
+    diag = await async_get_config_entry_diagnostics(MagicMock(), entry)
+    assert diag["inverter_model"] == {"dev_model": "99", "name": None}

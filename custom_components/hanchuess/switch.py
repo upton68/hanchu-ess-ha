@@ -4,6 +4,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo
+from .models import inverter_model_name
 from .const import DOMAIN, CONF_FAST_CHARGE_DURATION, DEFAULT_FAST_CHARGE_DURATION
 from . import HanchuessConfigEntry
 
@@ -52,7 +53,7 @@ class FastChargeSwitch(SwitchEntity):
             identifiers={(DOMAIN, inverter_serial_number)},
             name=f"Hanchuess {inverter_serial_number}",
             manufacturer="Hanchu",
-            model="ESS Device",
+            model=inverter_model_name(self._entry),
         )
 
     async def async_turn_on(self, **kwargs) -> None:
@@ -101,7 +102,7 @@ class FastDischargeSwitch(SwitchEntity):
             identifiers={(DOMAIN, inverter_serial_number)},
             name=f"Hanchuess {inverter_serial_number}",
             manufacturer="Hanchu",
-            model="ESS Device",
+            model=inverter_model_name(self._entry),
         )
 
     async def async_turn_on(self, **kwargs) -> None:

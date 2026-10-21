@@ -7,6 +7,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import DeviceInfo
+from .models import inverter_model_name
 from .const import DOMAIN
 from . import HanchuessConfigEntry
 
@@ -135,7 +136,7 @@ class HanchuessTimeSlot(TimeEntity):
             identifiers={(DOMAIN, inverter_serial_number)},
             name=f"Hanchuess {inverter_serial_number}",
             manufacturer="Hanchu",
-            model="ESS Device",
+            model=inverter_model_name(self._entry),
         )
 
     def apply_value(self, raw) -> None:
