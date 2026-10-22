@@ -128,3 +128,68 @@ def inverter_model_name(entry: Any) -> str:
     if isinstance(model, InverterModel):
         return model.name
     return DEFAULT_MODEL_NAME
+
+
+# ---------------------------------------------------------------------------
+# Battery packs
+# ---------------------------------------------------------------------------
+
+DEFAULT_BATTERY_MODEL_NAME = "Battery Pack"
+
+
+@dataclass(frozen=True)
+class BatteryModel:
+    """A known battery pack model.
+
+    ``heated`` is True/False only where it has been confirmed or follows
+    directly from a confirmed sibling; None means not known.
+    """
+
+    code: str
+    name: str
+    high_voltage: bool
+    heated: bool | None = None
+
+
+def _battery(code: str, name: str, heated: bool | None = None) -> BatteryModel:
+    return BatteryModel(code, name, "-HV-" in name.upper(), heated)
+
+
+# queryBatteryDataDivisions returns a string devModel (e.g. "3_1"). The names
+# are the Hanchu web console's own DevModel mapping. A "_n" suffix is a
+# variant of the same pack: "3_1" is the heated Home-ESS-LV-9.4K (Hanchu's
+# heating settings call it HOME-ESS-LV-9.4K-H) and "3" the unheated one, both
+# confirmed by owners. Other variants' differences aren't known yet.
+BATTERY_MODELS: dict[str, BatteryModel] = {
+    m.code: m
+    for m in (
+        _battery("1", "Home-ESS-LV-3.2K"),
+        _battery("3", "Home-ESS-LV-9.4K", heated=False),
+        _battery("3_1", "Home-ESS-LV-9.4K-H", heated=True),
+        _battery("4", "Home-ESS-HV-2.7K"),
+        _battery("4_1", "Home-ESS-HV-2.7K(RC)"),
+        _battery("6", "Home-ESS-HV-5.3K"),
+        _battery("7", "CESS-HV-9.4K"),
+        _battery("8", "Home-ESS-LV-5.12K"),
+        _battery("9", "Home-ESS-HV-5.12K"),
+        _battery("10", "Home-ESS-LV-3.68K"),
+        _battery("11", "HOME-ESS-LV-16K"),
+        _battery("12", "HOME-ESS-LV-16K-S"),
+        _battery("8_1", "HOME-ESS-LV-5.12K-M"),
+        _battery("8_2", "HOME-ESS-LV-5.12K-M"),
+    )
+}
+
+
+def lookup_battery_model(dev_model: Any) -> BatteryModel | None:
+    """Return the battery model for a queryBatteryDataDivisions devModel."""
+    if dev_model is None or isinstance(dev_model, bool):
+        return None
+    code = str(dev_model).strip()
+    return BATTERY_MODELS.get(code)
+
+
+def battery_model_name(battery_data: dict | None) -> str:
+    """Model name for a battery pack's DeviceInfo, or the generic default."""
+    model = lookup_battery_model((battery_data or {}).get("devModel"))
+    return model.name if model is not None else DEFAULT_BATTERY_MODEL_NAME

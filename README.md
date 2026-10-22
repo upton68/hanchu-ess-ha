@@ -12,7 +12,7 @@ This fork extends the original guoxiatech/hanchu-ess-ha integration — publishe
 - Battery Charge Power (W) — charge only derived power
 - Battery Discharge Power (W) — discharge only derived power
 - Battery Capacity (kWh)
-- Battery pack sensors (per discovered battery serial): Pack SOC (%), Pack SOH (%), Pack Voltage (V), Pack Current (A), Design Capacity (kWh), Full Capacity (Ah), Remaining Capacity (Ah), Temperature 1-N (degC, based on `numBatT`), Environment Temperature, Pack Temperature, MOS Temperature
+- Battery pack sensors (per discovered battery serial): Battery Model (diagnostic, see [Battery model detection](#battery-model-detection)), Pack SOC (%), Pack SOH (%), Pack Voltage (V), Pack Current (A), Design Capacity (kWh), Full Capacity (Ah), Remaining Capacity (Ah), Temperature 1-N (degC, based on `numBatT`), Environment Temperature, Pack Temperature, MOS Temperature
 - Grid Power (W) — signed (positive = import, negative = export)
 - Grid Import Power (W) — import only derived power
 - Grid Export Power (W) — export only derived power
@@ -75,6 +75,14 @@ For Predbat, **Battery Power Maximum** is the value for `battery_rate_max`, and 
 If the model code isn't recognised, or the model's battery maximum isn't documented (the 48 V HESS-HY-S-6K-S / 12K-S), the power limits fall back to the cloud menu values, as before, and the three sensors show as unknown. If you have a model that isn't recognised, please open an issue with your diagnostics file, which includes the model code.
 
 > **7, 8 and 10 kW single-phase owners:** your power limits can now go above 5000 W, matching your inverter's rating. A warning is logged at startup when the model table and the cloud menu disagree. If the inverter rejects a value above 5000 W, please report it.
+
+### Battery model detection
+
+Each battery pack's model code (`devModel`) is looked up in a table of Hanchu battery models, the same mapping the Hanchu web console uses. The model name is shown on the pack's device card and in a **Battery Model** diagnostic sensor. The sensor's attributes include the raw code, the pack's software version, whether it's a low-voltage (LV) or high-voltage (HV) pack, and, where known, whether it's a **heated** model.
+
+Some packs come in more than one version, shown by a suffix on the code. Code `3_1` is the heated Home-ESS-LV-9.4K, shown as Home-ESS-LV-9.4K-H, and `3` is the unheated version (both confirmed by owners). What the other variants differ by isn't known yet.
+
+If a pack's code isn't in the table, the sensor shows `Unknown (<code>)`. Please open an issue with that value so it can be added.
 
 ## Services
 

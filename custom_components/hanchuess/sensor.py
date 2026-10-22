@@ -19,7 +19,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity import DeviceInfo
-from .models import inverter_model_name
+from .models import (
+    battery_model_name,
+    inverter_model_name,
+    lookup_battery_model,
+)
 from .const import DOMAIN
 from . import HanchuessConfigEntry
 
@@ -458,6 +462,9 @@ async def async_setup_entry(
                 entities.append(
                     BatterySensor(battery_coordinator, entry, battery_serial, sensor_key, config)
                 )
+            entities.append(
+                BatteryModelSensor(battery_coordinator, entry, battery_serial)
+            )
             for sensor_key, config in BATTERY_SENSORS.items():
                 if (
                     sensor_key.startswith("battery_temperature_")
@@ -556,13 +563,7 @@ class BatterySensor(CoordinatorEntity, SensorEntity):
     @property
     def device_info(self) -> DeviceInfo:
         inverter_serial_number = self._entry.data["sn"]
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._battery_serial)},
-            via_device_id=self._entry.runtime_data.inverter_device_id,
-            name=f"Hanchuess Battery {self._battery_serial}",
-            manufacturer="Hanchu",
-            model="Battery Pack",
-        )
+        return _battery_device_info(self._entry, self.coordinator, self._battery_serial)
 
     @property
     def native_value(self):
@@ -768,3 +769,68 @@ class HanchuessModelSensor(SensorEntity):
         realtime = getattr(self._entry.runtime_data, "realtime", None)
         data = getattr(realtime, "data", None) or {}
         return {"dev_model": data.get("devModel")}
+
+
+def _battery_device_info(entry, coordinator, battery_serial: str) -> DeviceInfo:
+    """DeviceInfo for one battery pack, with its model when recognised."""
+    battery_data = (getattr(coordinator, "data", None) or {}).get(battery_serial, {})
+    return DeviceInfo(
+        identifiers={(DOMAIN, battery_serial)},
+        via_device_id=entry.runtime_data.inverter_device_id,
+        name=f"Hanchuess Battery {battery_serial}",
+        manufacturer="Hanchu",
+        model=battery_model_name(battery_data),
+    )
+
+
+class BatteryModelSensor(CoordinatorEntity, SensorEntity):
+    """Battery pack model, from queryBatteryDataDivisions devModel.
+
+    Shows the model name when the code is in the table in models.py, or the
+    raw code otherwise so it can be reported and added. Attributes carry the
+    raw code, the pack's software version, and whether it is a heated model
+    where that is known.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Battery Model"
+    _attr_icon = "mdi:information-outline"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, entry, battery_serial: str) -> None:
+        super().__init__(coordinator)
+        self._entry = entry
+        self._battery_serial = battery_serial
+        self._attr_unique_id = f"{battery_serial}_battery_model"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return _battery_device_info(self._entry, self.coordinator, self._battery_serial)
+
+    @property
+    def _battery_data(self) -> dict:
+        return (self.coordinator.data or {}).get(self._battery_serial, {}) or {}
+
+    @property
+    def native_value(self):
+        dev_model = self._battery_data.get("devModel")
+        model = lookup_battery_model(dev_model)
+        if model is not None:
+            return model.name
+        if dev_model in (None, ""):
+            return None
+        return f"Unknown ({dev_model})"
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        data = self._battery_data
+        model = lookup_battery_model(data.get("devModel"))
+        attrs = {
+            "dev_model": data.get("devModel"),
+            "software_version": data.get("softwareVer"),
+        }
+        if model is not None:
+            attrs["voltage_class"] = "HV" if model.high_voltage else "LV"
+            if model.heated is not None:
+                attrs["heated"] = model.heated
+        return attrs
