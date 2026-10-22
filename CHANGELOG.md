@@ -18,8 +18,9 @@ later versions are tracked here going forward.
   - New per-pack **Battery Model** diagnostic sensor, with the raw code, the
     pack's software version, LV/HV class and, where known, whether it is a
     heated model as attributes.
-  - Code `3_1` (heated Home-ESS-LV-9.4K, confirmed on hardware) is shown as
-    Home-ESS-LV-9.4K-H, matching Hanchu's own name for the heated version.
+  - Code `3_1` (heated Home-ESS-LV-9.4K) is shown as Home-ESS-LV-9.4K-H,
+    matching Hanchu's own name for the heated version, and `3` as the unheated
+    Home-ESS-LV-9.4K. Both confirmed by owners.
 
 ## [2.1.0] - 2026-10-21
 

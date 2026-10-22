@@ -157,9 +157,9 @@ def _battery(code: str, name: str, heated: bool | None = None) -> BatteryModel:
 
 # queryBatteryDataDivisions returns a string devModel (e.g. "3_1"). The names
 # are the Hanchu web console's own DevModel mapping. A "_n" suffix is a
-# variant of the same pack: "3_1" is the heated Home-ESS-LV-9.4K (confirmed on
-# hardware; Hanchu's heating settings call it HOME-ESS-LV-9.4K-H), so plain
-# "3" is the unheated one. Other variants' differences aren't known yet.
+# variant of the same pack: "3_1" is the heated Home-ESS-LV-9.4K (Hanchu's
+# heating settings call it HOME-ESS-LV-9.4K-H) and "3" the unheated one, both
+# confirmed by owners. Other variants' differences aren't known yet.
 BATTERY_MODELS: dict[str, BatteryModel] = {
     m.code: m
     for m in (

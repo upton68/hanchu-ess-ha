@@ -80,7 +80,7 @@ If the model code isn't recognised, or the model's battery maximum isn't documen
 
 Each battery pack's model code (`devModel`) is looked up in a table of Hanchu battery models, the same mapping the Hanchu web console uses. The model name is shown on the pack's device card and in a **Battery Model** diagnostic sensor. The sensor's attributes include the raw code, the pack's software version, whether it's a low-voltage (LV) or high-voltage (HV) pack, and, where known, whether it's a **heated** model.
 
-Some packs come in more than one version, shown by a suffix on the code. Code `3_1` is the heated Home-ESS-LV-9.4K, shown as Home-ESS-LV-9.4K-H, and `3` is the unheated version. What the other variants differ by isn't known yet.
+Some packs come in more than one version, shown by a suffix on the code. Code `3_1` is the heated Home-ESS-LV-9.4K, shown as Home-ESS-LV-9.4K-H, and `3` is the unheated version (both confirmed by owners). What the other variants differ by isn't known yet.
 
 If a pack's code isn't in the table, the sensor shows `Unknown (<code>)`. Please open an issue with that value so it can be added.
 
