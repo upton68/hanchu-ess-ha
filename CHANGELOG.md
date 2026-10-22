@@ -10,6 +10,17 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Added
+- Battery model detection. Each pack's `devModel` from
+  `queryBatteryDataDivisions` is looked up in a table of Hanchu battery models,
+  taken from the Hanchu web console's own mapping.
+  - Each battery's device card shows its model name instead of "Battery Pack".
+  - New per-pack **Battery Model** diagnostic sensor, with the raw code, the
+    pack's software version, LV/HV class and, where known, whether it is a
+    heated model as attributes.
+  - Code `3_1` (heated Home-ESS-LV-9.4K, confirmed on hardware) is shown as
+    Home-ESS-LV-9.4K-H, matching Hanchu's own name for the heated version.
+
 ## [2.1.0] - 2026-10-21
 
 ### Added

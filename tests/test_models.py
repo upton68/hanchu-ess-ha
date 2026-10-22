@@ -103,3 +103,72 @@ def test_inverter_model_name_falls_back_safely():
     assert inverter_model_name(entry) == DEFAULT_MODEL_NAME
     entry.runtime_data.inverter_model = lookup_inverter_model(4)
     assert inverter_model_name(entry) == "HESS-HY-S-5.0K"
+
+
+# --- Battery packs ---------------------------------------------------------
+
+from custom_components.hanchuess.models import (  # noqa: E402
+    BATTERY_MODELS,
+    DEFAULT_BATTERY_MODEL_NAME,
+    battery_model_name,
+    lookup_battery_model,
+)
+
+
+def test_battery_lookup_uses_string_codes_with_variants():
+    assert lookup_battery_model("3").name == "Home-ESS-LV-9.4K"
+    assert lookup_battery_model("3_1").name == "Home-ESS-LV-9.4K-H"
+    assert lookup_battery_model(" 8_2 ").name == "HOME-ESS-LV-5.12K-M"
+    assert lookup_battery_model(1).name == "Home-ESS-LV-3.2K"
+
+
+def test_battery_lookup_unknown_returns_none():
+    for value in (None, "", "2", "3_9", True):
+        assert lookup_battery_model(value) is None
+
+
+def test_battery_heated_known_only_for_9_4k_pair():
+    assert lookup_battery_model("3_1").heated is True
+    assert lookup_battery_model("3").heated is False
+    others = [m for code, m in BATTERY_MODELS.items() if code not in ("3", "3_1")]
+    assert all(m.heated is None for m in others)
+
+
+def test_battery_voltage_class_from_name():
+    assert lookup_battery_model("6").high_voltage is True  # Home-ESS-HV-5.3K
+    assert lookup_battery_model("7").high_voltage is True  # CESS-HV-9.4K
+    assert lookup_battery_model("3_1").high_voltage is False
+
+
+def test_battery_model_name_falls_back():
+    assert battery_model_name({"devModel": "3_1"}) == "Home-ESS-LV-9.4K-H"
+    assert battery_model_name({"devModel": "99"}) == DEFAULT_BATTERY_MODEL_NAME
+    assert battery_model_name(None) == DEFAULT_BATTERY_MODEL_NAME
+
+
+def test_battery_model_sensor_values_and_attributes():
+    from custom_components.hanchuess.sensor import BatteryModelSensor
+
+    coordinator = SimpleNamespace(
+        data={
+            "B1": {"devModel": "3_1", "softwareVer": "2.0.6|T37"},
+            "B2": {"devModel": "42"},
+            "B3": {},
+        }
+    )
+    entry = SimpleNamespace(
+        data={"sn": "SN1"},
+        runtime_data=SimpleNamespace(inverter_device_id="dev1"),
+    )
+    s1 = BatteryModelSensor(coordinator, entry, "B1")
+    assert s1.native_value == "Home-ESS-LV-9.4K-H"
+    assert s1.extra_state_attributes == {
+        "dev_model": "3_1",
+        "software_version": "2.0.6|T37",
+        "voltage_class": "LV",
+        "heated": True,
+    }
+    assert s1.device_info["model"] == "Home-ESS-LV-9.4K-H"
+    assert s1.unique_id == "B1_battery_model"
+    assert BatteryModelSensor(coordinator, entry, "B2").native_value == "Unknown (42)"
+    assert BatteryModelSensor(coordinator, entry, "B3").native_value is None
