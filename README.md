@@ -152,6 +152,7 @@ Low-level service for sending arbitrary key/value control signals directly to th
 - HACS installed
 - Hanchu iESS battery system with cloud connectivity
 - Hanchu app account (email and password)
+- The account must have logged into the [Hanchu web console](https://iess3.hanchuess.com/login) at least once (see [First-time setup](#first-time-setup))
 
 ## Installation
 
@@ -193,6 +194,23 @@ devices automatically:
 2. The integration logs in and lists the inverters on your account. **Select the
    device(s)** you want to add. Each selected device is created as its own HA
    device; no serial number needs to be entered by hand.
+
+### First-time setup
+
+If your account has never been used on the Hanchu web console, the setup flow
+finds your inverter but then fails with **"Could not load battery details"**.
+The Hanchu cloud doesn't enable battery/station access for an account until it
+has logged into the web console at least once.
+
+To fix it:
+
+1. Log in at [https://iess3.hanchuess.com/login](https://iess3.hanchuess.com/login)
+   with the same credentials you use for the Hanchu app. Accept any prompt to
+   switch to iEss3.
+2. Log out.
+3. Run the Home Assistant setup flow again.
+
+This only needs doing once per account.
 
 ### Options
 

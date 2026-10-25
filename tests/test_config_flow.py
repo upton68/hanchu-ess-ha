@@ -18,7 +18,7 @@ from homeassistant.data_entry_flow import FlowResultType, InvalidData
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 import custom_components.hanchuess as hanchuess
-from custom_components.hanchuess.const import DOMAIN
+from custom_components.hanchuess.const import DOMAIN, WEB_CONSOLE_URL
 
 pytestmark = pytest.mark.usefixtures("enable_custom_integrations")
 
@@ -135,6 +135,35 @@ async def test_user_flow_no_devices(hass: HomeAssistant):
         )
         assert result2["type"] == FlowResultType.FORM
         assert result2["errors"] == {"base": "no_devices"}
+    finally:
+        patcher.stop()
+
+
+async def test_select_device_battery_lookup_failed_shows_console_hint(
+    hass: HomeAssistant,
+):
+    """An empty station detail (account never used on the web console) shows
+    battery_lookup_failed with the console URL placeholder filled in."""
+    patcher, instance = _patched_client(
+        token="tok", devices=[{"sn": "SN1", "devType": "2"}]
+    )
+    instance.async_get_station_detail = AsyncMock(return_value={})
+    try:
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"account": "a", "password": "p"}
+        )
+        result3 = await hass.config_entries.flow.async_configure(
+            result2["flow_id"], {"devices": ["SN1"]}
+        )
+        assert result3["type"] == FlowResultType.FORM
+        assert result3["step_id"] == "select_device"
+        assert result3["errors"] == {"base": "battery_lookup_failed"}
+        assert result3["description_placeholders"] == {
+            "console_url": WEB_CONSOLE_URL
+        }
     finally:
         patcher.stop()
 

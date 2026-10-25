@@ -30,7 +30,7 @@
       "cannot_connect": "无法连接到服务器",
       "no_devices": "该账号下未找到设备",
       "station_lookup_failed": "无法加载站点详情",
-      "battery_lookup_failed": "无法加载电池详情"
+      "battery_lookup_failed": "无法加载电池详情。如果您从未登录过 Hanchu 网页控制台，请先在 {console_url} 登录一次并退出，然后重试。"
     },
     "abort": {
       "already_configured": "该设备已配置",

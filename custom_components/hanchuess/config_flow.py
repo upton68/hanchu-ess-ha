@@ -9,6 +9,7 @@ from homeassistant.core import callback
 from .const import (
     DOMAIN,
     BASE_URL,
+    WEB_CONSOLE_URL,
     CONF_REALTIME_INTERVAL,
     CONF_STATISTICS_INTERVAL,
     CONF_BATTERY_INTERVAL,
@@ -128,6 +129,7 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             vol.Required("devices"): cv.multi_select(available),
                         }),
                         errors=errors,
+                        description_placeholders={"console_url": WEB_CONSOLE_URL},
                     )
                 battery_serials = extract_battery_serials(station_detail)
 
