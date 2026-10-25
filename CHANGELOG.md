@@ -10,6 +10,8 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-10-25
+
 ### Changed
 - The "Could not load battery details" setup error now explains the most
   common cause: the Hanchu cloud doesn't give an account access to its
@@ -390,7 +392,8 @@ act on it straight away must now call `hanchuess.write_settings` after the write
 - Initial fork of the original integration with read-only battery, grid, PV, and
   load sensors and the custom Lovelace card.
 
-[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.2.1...HEAD
+[2.2.1]: https://github.com/upton68/hanchu-ess-ha/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.6...v2.1.0
 [2.0.6]: https://github.com/upton68/hanchu-ess-ha/compare/v2.0.5...v2.0.6
