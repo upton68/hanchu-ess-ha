@@ -148,7 +148,7 @@ Low-level service for sending arbitrary key/value control signals directly to th
 
 ## Requirements
 
-- Home Assistant 2024.1 or later
+- Home Assistant 2026.8.0 or later
 - HACS installed
 - Hanchu iESS battery system with cloud connectivity
 - Hanchu app account (email and password)
