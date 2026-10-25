@@ -30,7 +30,7 @@
       "cannot_connect": "Cannot connect to server",
       "no_devices": "No devices found under this account",
       "station_lookup_failed": "Could not load station details",
-      "battery_lookup_failed": "Could not load battery details"
+      "battery_lookup_failed": "Could not load battery details. If you have never logged into the Hanchu web console, log in once at {console_url}, log out, then try again."
     },
     "abort": {
       "already_configured": "This device is already configured",
