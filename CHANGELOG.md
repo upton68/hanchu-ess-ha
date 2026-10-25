@@ -10,6 +10,22 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Changed
+- The "Could not load battery details" setup error now explains the most
+  common cause: the Hanchu cloud doesn't give an account access to its
+  battery details until it has logged into the web console once. The message
+  tells the user to log in at https://iess3.hanchuess.com/login, log out and
+  try again. README has a new **First-time setup** section covering the same
+  (#40, #48).
+
+### Fixed
+- README listed Home Assistant 2024.1 as the minimum; it is 2026.8.0, as
+  already enforced by `hacs.json`.
+
+### Removed
+- Unused `strings.json`. Custom integrations load only `translations/*.json`,
+  and the file had drifted out of sync with `translations/en.json`.
+
 ## [2.2.0] - 2026-10-22
 
 ### Added
