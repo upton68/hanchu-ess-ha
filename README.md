@@ -74,7 +74,7 @@ For Predbat, **Battery Power Maximum** is the value for `battery_rate_max`, and 
 
 If the model code isn't recognised, or the model's battery maximum isn't documented (the 48 V HESS-HY-S-6K-S / 12K-S), the power limits fall back to the cloud menu values, as before, and the three sensors show as unknown. If you have a model that isn't recognised, please open an issue with your diagnostics file, which includes the model code.
 
-> **7, 8 and 10 kW single-phase owners:** your power limits can now go above 5000 W, matching your inverter's rating. A warning is logged at startup when the model table and the cloud menu disagree. If the inverter rejects a value above 5000 W, please report it.
+> **7, 8 and 10 kW single-phase owners:** your power limits can go above 5000 W, up to your inverter's rating. The Hanchu cloud accepts these values even though its own settings menu shows 0–5000 W, which was confirmed on a HESS-HY-S-8.0K ([#46](https://github.com/upton68/hanchu-ess-ha/issues/46)). A warning is still logged at startup when the model table and the cloud menu disagree; it's expected on these models and can be ignored.
 
 ### Battery model detection
 
