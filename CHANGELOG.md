@@ -10,6 +10,12 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Fixed
+- `hacs.json` now sets the minimum Home Assistant version to 2026.8.0. The
+  2.0.4 release notes and the README already gave 2026.8.0 as the minimum,
+  but `hacs.json` still said 2024.1.0, so HACS would offer the integration
+  to installs that can't run it.
+
 ## [2.2.1] - 2026-10-25
 
 ### Changed
