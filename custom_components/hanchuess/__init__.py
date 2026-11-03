@@ -542,6 +542,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
         # UpdateFailed (endless setup_retry).
         client._reauth_triggered = False
 
+    # Entries created before credentials were stored have none; they keep the
+    # old behaviour (reauth prompt) until the next reauth saves them.
+    if entry.data.get("account") and entry.data.get("password"):
+        client.set_credentials(entry.data["account"], entry.data["password"])
+
     coordinator = HanchuessRealtimeCoordinator(hass, entry, client)
     await _async_initial_refresh(coordinator, entry)
 
@@ -686,6 +691,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
                     "sn": item["sn"],
                     "dev_type": item.get("devType", "2"),
                     "token": entry.data["token"],
+                    "account": entry.data.get("account"),
+                    "password": entry.data.get("password"),
                     "stationId": entry.data.get("stationId"),
                     "battery_serials": entry.data.get("battery_serials", []),
                 },

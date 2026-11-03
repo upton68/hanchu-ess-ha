@@ -32,6 +32,8 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._token = None
         self._devices = []
         self._client = None
+        self._account = None
+        self._password = None
 
     @staticmethod
     @callback
@@ -46,6 +48,8 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if shared_client and shared_client.token:
             self._token = shared_client.token
             self._client = shared_client
+            self._account = shared_client._account
+            self._password = shared_client._password
             self._devices = await shared_client.async_get_devices()
             if self._devices:
                 return await self.async_step_select_device()
@@ -59,6 +63,8 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if token:
                 self._token = client.token
                 self._client = client
+                self._account = user_input["account"]
+                self._password = user_input["password"]
                 self._devices = await client.async_get_devices()
                 if self._devices:
                     return await self.async_step_select_device()
@@ -74,6 +80,12 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }),
             errors=errors,
         )
+
+    def _credentials(self) -> dict:
+        """Credentials to store with the entry, so a rejected refresh can re-login."""
+        if self._account and self._password:
+            return {"account": self._account, "password": self._password}
+        return {}
 
     async def async_step_select_device(self, user_input=None):
         """Step 2: Select devices (multi-select)."""
@@ -156,6 +168,7 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         "sn": inverter_serial_number,
                         "dev_type": dev_type,
                         "token": self._token,
+                        **self._credentials(),
                         "stationId": station_id,
                         "battery_serials": battery_serials,
                         "pending_devices": pending,
@@ -181,6 +194,8 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "sn": inverter_serial_number,
                 "dev_type": data.get("dev_type", "2"),
                 "token": data["token"],
+                **({"account": data["account"], "password": data["password"]}
+                   if data.get("account") and data.get("password") else {}),
                 "stationId": data.get("stationId"),
                 "battery_serials": data.get("battery_serials", []),
                 "pending_devices": [],
@@ -203,7 +218,13 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # Update token for ALL entries and shared client
                 for entry in self.hass.config_entries.async_entries(DOMAIN):
                     self.hass.config_entries.async_update_entry(
-                        entry, data={**entry.data, "token": token}
+                        entry,
+                        data={
+                            **entry.data,
+                            "token": token,
+                            "account": user_input["account"],
+                            "password": user_input["password"],
+                        },
                     )
                 # Update shared client
                 domain_data = self.hass.data.get(DOMAIN, {})
@@ -211,6 +232,9 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     domain_data["_client"]._token = token
                     domain_data["_client"]._token_time = time.time()
                     domain_data["_client"]._reauth_triggered = False
+                    domain_data["_client"].set_credentials(
+                        user_input["account"], user_input["password"]
+                    )
                 # Schedule reload for all entries (non-blocking)
                 for entry in self.hass.config_entries.async_entries(DOMAIN):
                     self.hass.async_create_task(

@@ -10,7 +10,19 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
-## [2.2.2] - 2016-11-03
+### Changed
+- The integration now stores your Hanchu account and password with the
+  config entry, so when the cloud rejects a token refresh it logs in again
+  automatically instead of asking you to re-authenticate. You are only
+  prompted if the stored password no longer works. As with most Home
+  Assistant cloud integrations, the credentials are kept in Home Assistant's
+  config storage (`.storage/core.config_entries`); they are redacted from
+  diagnostics.
+- Existing installs keep the previous behaviour until the next time you
+  complete a re-authentication prompt, which saves the credentials. New
+  installs store them during setup.
+
+## [2.2.2] - 2026-11-03
 
 ### Fixed
 - Re-adding the integration after a token failure no longer fails with
