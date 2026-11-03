@@ -530,6 +530,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
         )
     client = hass.data[DOMAIN]["_client"]
 
+    # The shared client can outlive a deleted/re-added entry. If the entry
+    # carries a different (newer) token, adopt it rather than keep using a
+    # stale one, which would 401 and then fail refresh with 90076.
+    entry_token = entry.data.get("token")
+    if entry_token and entry_token != client.token:
+        client.set_token(entry_token)
+    else:
+        # Re-arm the one-shot reauth trigger so an auth failure during this
+        # setup raises ConfigEntryAuthFailed (reauth prompt) instead of
+        # UpdateFailed (endless setup_retry).
+        client._reauth_triggered = False
+
     coordinator = HanchuessRealtimeCoordinator(hass, entry, client)
     await _async_initial_refresh(coordinator, entry)
 
@@ -685,4 +697,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) -> bool:
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        still_loaded = [
+            other
+            for other in hass.config_entries.async_entries(DOMAIN)
+            if other.entry_id != entry.entry_id
+            and other.state is ConfigEntryState.LOADED
+        ]
+        if not still_loaded:
+            # Drop the shared client so a re-add starts with a fresh token
+            # instead of inheriting a dead one.
+            hass.data.get(DOMAIN, {}).pop("_client", None)
+    return unloaded

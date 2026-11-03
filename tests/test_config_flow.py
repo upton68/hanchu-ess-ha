@@ -402,3 +402,97 @@ async def test_setup_entry_backfills_station_id(hass: HomeAssistant):
     client.async_get_device_status.assert_awaited_once_with("SN1", "fr")
     client.async_get_station_detail.assert_awaited_once_with("ST2503268043IE", "fr")
     client.async_get_battery_data.assert_any_await("B1", "fr")
+
+
+# --- Issue #52: stale shared client after delete/re-add -----------------------
+
+
+async def test_setup_entry_adopts_newer_entry_token(hass: HomeAssistant):
+    """A re-added entry's fresh token must replace the shared client's stale one."""
+    from custom_components.hanchuess.api import HanchuessApiClient
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"sn": "SN1", "token": "fresh", "stationId": "ST1", "battery_serials": []},
+        unique_id="SN1",
+    )
+    entry.add_to_hass(hass)
+
+    stale = HanchuessApiClient(hass, "https://example.invalid", token="dead")
+    stale._reauth_triggered = True  # left over from the earlier failure
+    hass.data.setdefault(DOMAIN, {})["_client"] = stale
+
+    with patch.object(
+        HanchuessApiClient, "async_get_device_status", AsyncMock(return_value={"devStatus": 1})
+    ), patch.object(
+        HanchuessApiClient, "async_get_device_statistics", AsyncMock(return_value={"load": 1})
+    ), patch.object(
+        HanchuessApiClient, "async_get_menu", AsyncMock(return_value={"code": 200, "data": {}})
+    ), patch.object(
+        HanchuessApiClient, "async_iot_get", AsyncMock(return_value={})
+    ), patch.object(
+        HanchuessApiClient, "async_get_station_detail", AsyncMock(return_value={"success": True, "data": {"bmsList": []}})
+    ), patch.object(hass.config_entries, "async_forward_entry_setups", AsyncMock()):
+        assert await hanchuess.async_setup_entry(hass, entry) is True
+
+    assert stale.token == "fresh"
+    assert stale._reauth_triggered is False
+
+
+async def test_setup_entry_rearms_reauth_trigger(hass: HomeAssistant):
+    """With an unchanged token, setup must still re-arm the one-shot reauth trigger."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"sn": "SN1", "token": "tok", "stationId": "ST1", "battery_serials": []},
+        unique_id="SN1",
+    )
+    entry.add_to_hass(hass)
+
+    client = MagicMock()
+    client.token = "tok"
+    client._reauth_triggered = True
+    client.should_refresh_token.return_value = False
+    client.async_get_device_status = AsyncMock(return_value={"devStatus": 1})
+    client.async_get_device_statistics = AsyncMock(return_value={"load": 1})
+    client.async_get_menu = AsyncMock(return_value={"code": 200, "data": {}})
+    client.async_iot_get = AsyncMock(return_value={})
+    client.async_get_station_detail = AsyncMock(return_value={"success": True, "data": {"bmsList": []}})
+    hass.data.setdefault(DOMAIN, {})["_client"] = client
+
+    with patch.object(hass.config_entries, "async_forward_entry_setups", AsyncMock()):
+        assert await hanchuess.async_setup_entry(hass, entry) is True
+
+    client.set_token.assert_not_called()
+    assert client._reauth_triggered is False
+
+
+async def test_unload_last_entry_drops_shared_client(hass: HomeAssistant):
+    """Unloading the last entry must remove the shared client."""
+    entry = MockConfigEntry(domain=DOMAIN, data={"sn": "SN1", "token": "tok"}, unique_id="SN1")
+    entry.add_to_hass(hass)
+    hass.data.setdefault(DOMAIN, {})["_client"] = MagicMock()
+
+    with patch.object(hass.config_entries, "async_unload_platforms", AsyncMock(return_value=True)):
+        assert await hanchuess.async_unload_entry(hass, entry) is True
+
+    assert "_client" not in hass.data[DOMAIN]
+
+
+async def test_unload_keeps_client_while_other_entries_loaded(hass: HomeAssistant):
+    """The shared client must survive while another entry is still loaded."""
+    from homeassistant.config_entries import ConfigEntryState
+
+    entry = MockConfigEntry(domain=DOMAIN, data={"sn": "SN1", "token": "tok"}, unique_id="SN1")
+    other = MockConfigEntry(
+        domain=DOMAIN, data={"sn": "SN2", "token": "tok"}, unique_id="SN2",
+        state=ConfigEntryState.LOADED,
+    )
+    entry.add_to_hass(hass)
+    other.add_to_hass(hass)
+    client = MagicMock()
+    hass.data.setdefault(DOMAIN, {})["_client"] = client
+
+    with patch.object(hass.config_entries, "async_unload_platforms", AsyncMock(return_value=True)):
+        assert await hanchuess.async_unload_entry(hass, entry) is True
+
+    assert hass.data[DOMAIN]["_client"] is client

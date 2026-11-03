@@ -35,6 +35,13 @@ class HanchuessApiClient:
     def token(self) -> str:
         return self._token
 
+    def set_token(self, token: str) -> None:
+        """Adopt a freshly issued token and reset auth-failure state."""
+        self._token = token
+        self._token_time = time.time()
+        self._reauth_triggered = False
+        self._last_refresh_attempt = 0
+
     def _headers(self, language: str = "en") -> dict:
         headers = {
             "Content-Type": "application/json",
@@ -145,13 +152,34 @@ class HanchuessApiClient:
         return []
 
     async def async_get_station_detail(self, station_id: str, language: str = "en") -> dict:
-        payload = _encrypt_payload({"stationId": station_id})
-        result = await self._request(
+        """Return station detail including bmsList.
+
+        Hanchu deprecated /platform/station/detail in Nov 2026 ("This API has
+        been deprecated."). /platform/homePage/stationInfo returns the same
+        data.bmsList shape, so try it first and keep the old endpoint as a
+        fallback.
+        """
+        result = None
+        for path in (
+            "/gateway/platform/homePage/stationInfo",
             "/gateway/platform/station/detail",
-            payload,
-            language=language,
-            send_as_json=False,
-        )
+        ):
+            payload = _encrypt_payload({"stationId": station_id})
+            result = await self._request(
+                path,
+                payload,
+                language=language,
+                send_as_json=False,
+            )
+            if result and result.get("success"):
+                return result
+            _LOGGER.debug(
+                "[HANCHUESS] %s did not return station detail: %s",
+                path,
+                result.get("msg") if result else None,
+            )
+        # Preserve the previous contract: return the last response (or {}) so
+        # callers' existing error handling is unchanged.
         return result or {}
 
     async def async_get_battery_data(self, device_id: str, language: str = "en") -> dict:

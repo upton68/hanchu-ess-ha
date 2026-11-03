@@ -18,6 +18,7 @@ LOGIN = f"{BASE_URL}/gateway/identify/auth/token"
 REFRESH = f"{BASE_URL}/gateway/identify/auth/token/refresh"
 DEVICE_LIST = f"{BASE_URL}/gateway/app/ha/getDeviceList"
 STATION_DETAIL = f"{BASE_URL}/gateway/platform/station/detail"
+STATION_INFO = f"{BASE_URL}/gateway/platform/homePage/stationInfo"
 STATUS = f"{BASE_URL}/gateway/app/ha/getDeviceStatus"
 STATISTICS = f"{BASE_URL}/gateway/app/ha/getDeviceStatistics"
 MENU = f"{BASE_URL}/gateway/app/ha/menu"
@@ -160,7 +161,7 @@ async def test_get_station_detail_success(monkeypatch, hass):
 
     class _Session:
         def post(self, url, **kwargs):
-            assert url == STATION_DETAIL
+            assert url == STATION_INFO
             assert kwargs["headers"]["appPlat"] == "ha"
             assert kwargs["headers"]["access-token"] == "t"
             assert kwargs["headers"]["locale"] == "en"
@@ -175,6 +176,46 @@ async def test_get_station_detail_success(monkeypatch, hass):
 
     data = await client.async_get_station_detail("ST2503268043IE")
     assert data == {"success": True, "data": {"bmsList": [{"sn": "B1"}, {"sn": "B2"}]}}
+
+
+async def test_get_station_detail_falls_back_when_station_info_fails(monkeypatch, hass):
+    """If stationInfo is unavailable, the old station/detail endpoint is tried."""
+    client = HanchuessApiClient(hass, BASE_URL, token="t")
+    calls = []
+    bodies = {
+        STATION_INFO: {"code": 100, "msg": "This API has been deprecated.", "success": False},
+        STATION_DETAIL: {"success": True, "data": {"bmsList": [{"sn": "B1"}]}},
+    }
+
+    class _Response:
+        status = 200
+
+        def __init__(self, body):
+            self._body = body
+
+        async def json(self, content_type=None):
+            return self._body
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class _Session:
+        def post(self, url, **kwargs):
+            calls.append(url)
+            assert _decrypt_payload(kwargs["data"]) == {"stationId": "ST1"}
+            return _Response(bodies[url])
+
+    monkeypatch.setattr(
+        "custom_components.hanchuess.api.async_get_clientsession",
+        lambda hass: _Session(),
+    )
+
+    data = await client.async_get_station_detail("ST1")
+    assert calls == [STATION_INFO, STATION_DETAIL]
+    assert data["data"]["bmsList"] == [{"sn": "B1"}]
 
 
 async def test_get_battery_data_success(monkeypatch, hass):
