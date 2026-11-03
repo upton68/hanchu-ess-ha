@@ -195,6 +195,12 @@ devices automatically:
    device(s)** you want to add. Each selected device is created as its own HA
    device; no serial number needs to be entered by hand.
 
+Your email address and password are stored with the integration so it can sign
+in again by itself if the Hanchu cloud rejects its session (see
+[Re-authentication](#re-authentication)). Like most Home Assistant cloud
+integrations, they are kept in Home Assistant's own config storage, and they are
+redacted from diagnostics files.
+
 ### First-time setup
 
 If your account has never been used on the Hanchu web console, the setup flow
@@ -225,10 +231,20 @@ Changing an option reloads the device so the new values take effect immediately.
 
 ### Re-authentication
 
-Tokens are refreshed automatically, but if a refresh ultimately fails Home
-Assistant raises a repair so you can sign in again without re-adding the
-integration. When the token expires, entities first show as unavailable, a repair
-prompt appears, and signing in restores them.
+The session token is refreshed automatically. If the Hanchu cloud rejects a
+refresh, the integration signs in again with your stored credentials, so no
+action is needed and entities carry on updating.
+
+You are only asked to sign in again if that automatic sign-in also fails, for
+example because you changed your Hanchu password. Home Assistant then shows an
+**"Authentication expired"** repair (and entities show as unavailable). Open it,
+enter your current email address and password, and the integration reconnects
+without needing to be re-added.
+
+> **Upgrading from 2.2.2 or earlier:** existing installs don't have stored
+> credentials yet, so the first time the session is rejected you'll still see the
+> repair. Completing it once saves your credentials, and from then on the
+> integration recovers on its own.
 
 ## Configuration Options
 
@@ -255,7 +271,8 @@ instructions, CI checks, and the contribution workflow are documented in
 
 ## Known Limitations
 
-- Token refresh is handled automatically every 25 days
+- The session token is refreshed automatically every 25 days, and the integration
+  signs in again with your stored credentials if the cloud rejects a refresh
 - Control entity changes (Work Mode, power limits, SOC limits, time slots) are
   **staged locally** and only written to the device when you press **Write Settings**
   or call `hanchuess.write_settings`. Existing automations that write these entities
