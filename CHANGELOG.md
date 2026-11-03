@@ -11,6 +11,17 @@ later versions are tracked here going forward.
 ## [Unreleased]
 
 ### Fixed
+- Re-adding the integration after a token failure no longer fails with
+  401 / "90076 Account or password incorrect". The shared API client is now
+  dropped when the last entry unloads, and setup adopts the entry's fresh
+  token instead of reusing a dead one (#52).
+- Authentication failures now raise Home Assistant's re-auth prompt reliably,
+  instead of retrying setup every few seconds (#52).
+- Battery discovery restored. Hanchu has deprecated
+  `/platform/station/detail`, so new or re-added installs found no batteries.
+  Discovery now uses `/platform/homePage/stationInfo`, with the old endpoint
+  as a fallback. Existing installs were unaffected because their battery
+  serials were already stored (#52).
 - `hacs.json` now sets the minimum Home Assistant version to 2026.8.0. The
   2.0.4 release notes and the README already gave 2026.8.0 as the minimum,
   but `hacs.json` still said 2024.1.0, so HACS would offer the integration
