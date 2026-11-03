@@ -10,7 +10,7 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
-## [2.2.2] - 2016-11-03
+## [2.2.2] - 2026-11-03
 
 ### Fixed
 - Re-adding the integration after a token failure no longer fails with
