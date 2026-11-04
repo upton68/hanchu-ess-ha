@@ -101,6 +101,47 @@ async def test_refresh_token_code_100_raises_reauth(hass):
             await client.async_refresh_token(force=True)
 
 
+async def test_refresh_rejected_relogs_in_with_stored_credentials(hass):
+    """A 90076 refresh with stored credentials logs in again instead of raising."""
+    client = HanchuessApiClient(hass, BASE_URL, token="old")
+    client.set_credentials("a", "p")
+    client._reauth_triggered = True
+    with aioresponses() as m:
+        m.post(REFRESH, payload={"success": False, "code": 100, "msg": "90076 : Account or password incorrect!"})
+        m.post(LOGIN, payload={"success": True, "data": "relogin-tok"})
+        new = await client.async_refresh_token(force=True)
+    assert new == "relogin-tok"
+    assert client.token == "relogin-tok"
+    assert client._reauth_triggered is False
+
+
+async def test_refresh_rejected_and_relogin_fails_raises_reauth(hass):
+    """If the stored credentials no longer work, fall back to the reauth prompt."""
+    client = HanchuessApiClient(hass, BASE_URL, token="old")
+    client.set_credentials("a", "changed")
+    with aioresponses() as m:
+        m.post(REFRESH, payload={"success": False, "code": 100, "msg": "expired"})
+        m.post(LOGIN, payload={"success": False, "msg": "bad creds"})
+        with pytest.raises(ReauthRequired):
+            await client.async_refresh_token(force=True)
+
+
+async def test_login_stores_credentials(hass):
+    client = HanchuessApiClient(hass, BASE_URL)
+    with aioresponses() as m:
+        m.post(LOGIN, payload={"success": True, "data": "tok"})
+        await client.async_login("a", "p")
+    assert client.has_credentials
+
+
+async def test_failed_login_does_not_store_credentials(hass):
+    client = HanchuessApiClient(hass, BASE_URL)
+    with aioresponses() as m:
+        m.post(LOGIN, payload={"success": False, "msg": "bad creds"})
+        await client.async_login("a", "wrong")
+    assert not client.has_credentials
+
+
 async def test_refresh_token_other_failure_returns_none(hass):
     client = HanchuessApiClient(hass, BASE_URL, token="old")
     with aioresponses() as m:

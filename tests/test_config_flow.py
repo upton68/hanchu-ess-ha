@@ -96,6 +96,8 @@ async def test_user_flow_creates_entry(hass: HomeAssistant):
         assert result3["data"]["sn"] == "SN1"
         assert result3["data"]["dev_type"] == "2"
         assert result3["data"]["token"] == "tok"
+        assert result3["data"]["account"] == "a"
+        assert result3["data"]["password"] == "p"
         assert result3["data"]["stationId"] == "ST2503268043IE"
         assert result3["data"]["battery_serials"] == [
             "B007EN5811054",
@@ -234,8 +236,10 @@ async def test_reauth_flow_success(hass: HomeAssistant):
             assert result2["type"] == FlowResultType.ABORT
             assert result2["reason"] == "reauth_successful"
 
-        # Token on the existing entry was updated.
+        # Token and credentials on the existing entry were updated.
         assert entry.data["token"] == "new-tok"
+        assert entry.data["account"] == "a"
+        assert entry.data["password"] == "p"
     finally:
         patcher.stop()
 
@@ -496,3 +500,59 @@ async def test_unload_keeps_client_while_other_entries_loaded(hass: HomeAssistan
         assert await hanchuess.async_unload_entry(hass, entry) is True
 
     assert hass.data[DOMAIN]["_client"] is client
+
+
+# --- Stored credentials for automatic re-login ---------------------------------
+
+
+async def test_import_flow_carries_credentials(hass: HomeAssistant):
+    """Additional inverters created from the pending list keep the credentials."""
+    with patch("custom_components.hanchuess.async_setup_entry", return_value=True):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_IMPORT},
+            data={"sn": "SN2", "token": "tok", "account": "a", "password": "p"},
+        )
+        await hass.async_block_till_done()
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"]["account"] == "a"
+    assert result["data"]["password"] == "p"
+
+
+async def test_import_flow_without_credentials_stores_none(hass: HomeAssistant):
+    with patch("custom_components.hanchuess.async_setup_entry", return_value=True):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_IMPORT},
+            data={"sn": "SN3", "token": "tok", "account": None, "password": None},
+        )
+        await hass.async_block_till_done()
+    assert "account" not in result["data"]
+    assert "password" not in result["data"]
+
+
+async def test_setup_entry_passes_stored_credentials_to_client(hass: HomeAssistant):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "sn": "SN1", "token": "tok", "account": "a", "password": "p",
+            "stationId": "ST1", "battery_serials": [],
+        },
+        unique_id="SN1",
+    )
+    entry.add_to_hass(hass)
+
+    client = MagicMock()
+    client.token = "tok"
+    client.should_refresh_token.return_value = False
+    client.async_get_device_status = AsyncMock(return_value={"devStatus": 1})
+    client.async_get_device_statistics = AsyncMock(return_value={"load": 1})
+    client.async_get_menu = AsyncMock(return_value={"code": 200, "data": {}})
+    client.async_iot_get = AsyncMock(return_value={})
+    client.async_get_station_detail = AsyncMock(return_value={"success": True, "data": {"bmsList": []}})
+    hass.data.setdefault(DOMAIN, {})["_client"] = client
+
+    with patch.object(hass.config_entries, "async_forward_entry_setups", AsyncMock()):
+        assert await hanchuess.async_setup_entry(hass, entry) is True
+
+    client.set_credentials.assert_called_once_with("a", "p")

@@ -30,10 +30,21 @@ class HanchuessApiClient:
         self._refresh_lock = asyncio.Lock()
         self._reauth_triggered = False
         self._last_refresh_attempt = 0
+        self._account: str | None = None
+        self._password: str | None = None
 
     @property
     def token(self) -> str:
         return self._token
+
+    @property
+    def has_credentials(self) -> bool:
+        return bool(self._account and self._password)
+
+    def set_credentials(self, account: str | None, password: str | None) -> None:
+        """Hold the account credentials so a rejected refresh can log in again."""
+        self._account = account or None
+        self._password = password or None
 
     def set_token(self, token: str) -> None:
         """Adopt a freshly issued token and reset auth-failure state."""
@@ -111,6 +122,7 @@ class HanchuessApiClient:
         if result and result.get("success"):
             self._token = result.get("data")
             self._token_time = time.time()
+            self.set_credentials(account, password)
             return self._token
         return None
 
@@ -134,6 +146,15 @@ class HanchuessApiClient:
                 return self._token
             if result and result.get("code") == 100:
                 _LOGGER.warning("[HANCHUESS] refresh_token failed: code=100, msg=%s", result.get("msg"))
+                if self.has_credentials:
+                    # The cloud rejected the refresh but the stored credentials may
+                    # still be valid: log in again instead of asking the user.
+                    _LOGGER.info("[HANCHUESS] Token refresh rejected, logging in again")
+                    token = await self.async_login(self._account, self._password)
+                    if token:
+                        self._reauth_triggered = False
+                        return token
+                    _LOGGER.warning("[HANCHUESS] Automatic re-login failed, reauth required")
                 raise ReauthRequired()
             return None
 
