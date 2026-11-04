@@ -10,6 +10,8 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-11-04
+
 ### Changed
 - The integration now stores your Hanchu account and password with the
   config entry, so when the cloud rejects a token refresh it logs in again
@@ -423,7 +425,8 @@ act on it straight away must now call `hanchuess.write_settings` after the write
 - Initial fork of the original integration with read-only battery, grid, PV, and
   load sensors and the custom Lovelace card.
 
-[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.2.2...HEAD
+[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.2.2...v2.3.0
 [2.2.2]: https://github.com/upton68/hanchu-ess-ha/compare/v2.2.1...v2.2.2
 [2.2.1]: https://github.com/upton68/hanchu-ess-ha/compare/v2.2.0...v2.2.1
 [2.2.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.1.0...v2.2.0
