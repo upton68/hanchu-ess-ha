@@ -2,7 +2,8 @@
 
 A Home Assistant integration for the Hanchu iESS battery storage system, providing full local control and automation support via the Hanchu cloud gateway API.
 
-This fork extends the original guoxiatech/hanchu-ess-ha integration — published by Hanchu (Guoxia Technology, the manufacturer) but not actively maintained since its initial release — with proper automatable entities, correct API mappings, and Predbat compatibility.
+This fork extends the original guoxiatech/hanchu-ess-ha integration — 
+published by Hanchu (Guoxia Technology, the manufacturer) which has had few updates and open issues going unanswered — with proper automatable entities, correct API mappings, and Predbat compatibility.
 
 ## Features
 
