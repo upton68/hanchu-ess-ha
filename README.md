@@ -150,14 +150,29 @@ Low-level service for sending arbitrary key/value control signals directly to th
 ## Requirements
 
 - Home Assistant 2026.8.0 or later
-- HACS installed
+- Home Assistant 2026.11 or newer: nothing extra — the built-in **Marketplace** (Settings → Marketplace) replaces HACS
+- Home Assistant 2026.8 to 2026.10: HACS installed
 - Hanchu iESS battery system with cloud connectivity
 - Hanchu app account (email and password)
 - The account must have logged into the [Hanchu web console](https://iess3.hanchuess.com/login) at least once (see [First-time setup](#first-time-setup))
 
 ## Installation
 
-### Via HACS (recommended)
+### Home Assistant 2026.11 or newer — via the Marketplace (recommended)
+
+From 2026.11, HACS is built into Home Assistant as the **Marketplace**. You must be logged in as an administrator.
+
+1. Go to **Settings → Marketplace**
+2. In the upper-right corner, select **Add from link**
+3. Under **GitHub link**, enter `upton68/hanchu-ess-ha` (or the full URL `https://github.com/upton68/hanchu-ess-ha`) and select **Add**
+4. If asked for a **Type**, choose **Integration** and select **Add** again
+5. Select **Hanchuess** in the list, then select **Install**, check the version and select **Install** again
+6. The setup page normally opens straight away — if the Marketplace asks you to restart, restart Home Assistant via **Settings → System → Repairs**
+7. If setup didn't open, go to **Settings → Devices & Services → Add Integration**, search for **Hanchuess** and follow the setup flow
+
+> **Upgrading an existing HACS install to 2026.11?** You don't need to do anything. On first start after the upgrade, Home Assistant moves everything from HACS (including this custom repository) into the Marketplace, and Hanchuess keeps getting updates there. After installing an update, restart Home Assistant to apply it.
+
+### Home Assistant 2026.10 or older — via HACS
 
 1. Open HACS in Home Assistant
 2. Click the three dots menu → **Custom repositories**
@@ -177,8 +192,10 @@ Low-level service for sending arbitrary key/value control signals directly to th
 
 1. Go to **Settings → Devices & Services**, find the Hanchuess entry, and choose
    **Delete**. This removes the device and its entities.
-2. HACS installs: also remove Hanchuess from HACS (or its custom repository) so
-   it's no longer offered for updates — this also deletes the integration files.
+2. Marketplace installs (2026.11 or newer): also remove Hanchuess from
+   **Settings → Marketplace** so it's no longer offered for updates. HACS installs
+   (2026.10 or older): remove Hanchuess from HACS (or its custom repository) —
+   this also deletes the integration files.
 3. Manual installs: additionally delete the `custom_components/hanchuess` folder
    and restart Home Assistant.
 4. The integration auto-registers a Lovelace resource for the custom card on
