@@ -10,6 +10,11 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Documentation
+- Added an [inverter status sensor recipe](docs/inverter-status.md)
+  (Fast Charging / Scheduled Charge / Charging / Idle, etc.) built from
+  helpers, template sensors and an automation. Contributed by @lancedfr (#33).
+
 ## [2.3.0] - 2026-11-04
 
 ### Changed

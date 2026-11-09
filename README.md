@@ -281,6 +281,14 @@ The Hanchu iESS works with [Predbat](https://github.com/springfall2008/batpred) 
 
 Full setup instructions, including the bridge script, helper configuration, `apps.yaml` template, and `configuration.yaml` additions, are documented in the [Predbat inverter setup docs](https://springfall2008.github.io/batpred/inverter-setup/#hanchu-iess).
 
+## Inverter Status Sensor
+
+Want a single sensor showing whether the battery is fast charging, running a
+scheduled charge or discharge, charging from solar, or idle? See the
+[inverter status sensor recipe](docs/inverter-status.md). It's built from
+Home Assistant helpers, template sensors and one automation, so you can adapt
+it to your setup. Contributed by [@lancedfr](https://github.com/lancedfr).
+
 ## Development
 
 Setup, the test suite (offline / config-flow / live tiers), platform-specific
