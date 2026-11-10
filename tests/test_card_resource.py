@@ -50,6 +50,14 @@ class _LazyResources:
         self.stored = [dict(r) for r in self.data]  # save in-memory list to disk
         return item
 
+    async def async_update_item(self, item_id, updates):
+        for item in self.data:
+            if item["id"] == item_id:
+                item["type"] = updates["res_type"]
+                item["url"] = updates["url"]
+        self.stored = [dict(r) for r in self.data]
+        return item
+
 
 def _make_hass(resources, mode="storage"):
     return SimpleNamespace(
@@ -87,3 +95,30 @@ async def test_yaml_mode_is_left_alone():
 
 async def test_no_lovelace_data_is_a_no_op():
     await _async_register_card_resource(SimpleNamespace(data={}))
+
+
+# --- HA 2026.11: card moved off /hacsfiles -------------------------------------
+
+
+@pytest.mark.parametrize(
+    "old_url",
+    [
+        "/hacsfiles/hanchuess/hanchuess-energy-card.js",
+        "/local/community/hanchuess/hanchuess-energy-card.js",
+        "/hanchuess_card/hanchuess-energy-card.js?v=0.0.1",
+    ],
+)
+async def test_old_card_url_is_updated_in_place(old_url):
+    """An existing entry pointing at an old URL is repointed, not duplicated."""
+    stored = OTHER_RESOURCES + [{"id": "c", "type": "module", "url": old_url}]
+    resources = _LazyResources(stored)
+
+    await _async_register_card_resource(_make_hass(resources))
+
+    urls = [r["url"] for r in resources.stored]
+    assert urls == [r["url"] for r in OTHER_RESOURCES] + [CARD_URL]
+
+
+async def test_card_url_is_not_under_hacsfiles():
+    assert not CARD_URL.startswith("/hacsfiles/")
+    assert CARD_URL.startswith("/hanchuess_card/hanchuess-energy-card.js?v=")
