@@ -1,5 +1,6 @@
 """Hanchuess Home Assistant integration."""
 import logging
+import json
 import os
 import asyncio
 from dataclasses import dataclass
@@ -37,7 +38,24 @@ SERVICE_SCHEMA = vol.Schema({
     vol.Required("value"): dict,
 })
 
-CARD_URL = "/hacsfiles/hanchuess/hanchuess-energy-card.js"
+# The card is served from the integration's own path. It used to live under
+# /hacsfiles/hanchuess, but /hacsfiles belongs to HACS - which Home Assistant
+# 2026.11 replaced with the built-in Marketplace - so that URL stopped serving
+# the card. The version query makes browsers fetch the new file after updates.
+CARD_URL_BASE = "/hanchuess_card"
+CARD_FILE = "hanchuess-energy-card.js"
+LEGACY_CARD_URL_BASE = "/hacsfiles/hanchuess"
+
+
+def _manifest_version() -> str:
+    try:
+        with open(os.path.join(os.path.dirname(__file__), "manifest.json"), encoding="utf-8") as fh:
+            return json.load(fh).get("version", "0")
+    except (OSError, ValueError):
+        return "0"
+
+
+CARD_URL = f"{CARD_URL_BASE}/{CARD_FILE}?v={_manifest_version()}"
 
 
 @dataclass
@@ -266,17 +284,23 @@ async def _refresh_battery_serials(
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
+    from homeassistant.components.http import StaticPathConfig
+
+    www = os.path.join(os.path.dirname(__file__), "www")
     try:
-        from homeassistant.components.http import StaticPathConfig
-        await hass.http.async_register_static_paths([
-            StaticPathConfig(
-                "/hacsfiles/hanchuess",
-                os.path.join(os.path.dirname(__file__), "www"),
-                cache_headers=False,
-            )
-        ])
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(CARD_URL_BASE, www, cache_headers=False)]
+        )
     except Exception:
         _LOGGER.warning("[HANCHUESS] Static path registration failed")
+    try:
+        # Old URL, kept for dashboards whose resources are managed in YAML.
+        # Best effort: on 2026.11+ the Marketplace may own /hacsfiles.
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(LEGACY_CARD_URL_BASE, www, cache_headers=False)]
+        )
+    except Exception:
+        _LOGGER.debug("[HANCHUESS] Legacy /hacsfiles card path not registered")
 
     websocket_api.async_register_command(hass, ws_iot_get)
     websocket_api.async_register_command(hass, ws_iot_set)
@@ -506,10 +530,23 @@ async def _async_register_card_resource(hass: HomeAssistant) -> None:
         return
     resources = lovelace_data.resources
     await resources.async_get_info()  # forces the lazy load from storage
-    if any("hanchuess-energy-card" in r.get("url", "") for r in resources.async_items()):
+    existing = [
+        r for r in resources.async_items() if CARD_FILE in r.get("url", "")
+    ]
+    if not existing:
+        await resources.async_create_item({"res_type": "module", "url": CARD_URL})
+        _LOGGER.info("[HANCHUESS] Card resource auto-registered")
         return
-    await resources.async_create_item({"res_type": "module", "url": CARD_URL})
-    _LOGGER.info("[HANCHUESS] Card resource auto-registered")
+    # Point an old entry (e.g. /hacsfiles/..., or a URL rewritten by the
+    # HACS-to-Marketplace migration) or an older version at the current URL.
+    for item in existing:
+        if item.get("url") != CARD_URL:
+            await resources.async_update_item(
+                item["id"], {"res_type": "module", "url": CARD_URL}
+            )
+            _LOGGER.info(
+                "[HANCHUESS] Card resource updated: %s -> %s", item.get("url"), CARD_URL
+            )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) -> bool:

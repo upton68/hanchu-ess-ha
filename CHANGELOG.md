@@ -10,6 +10,16 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Fixed
+- The **Hanchuess Remote Settings** card failed to load on Home Assistant
+  2026.11, where the built-in Marketplace replaced HACS and took over the
+  `/hacsfiles` URLs the card was served from. The card is now served from the
+  integration's own path (`/hanchuess_card/`), and the existing dashboard
+  resource is updated automatically on startup. A version number in the URL
+  makes browsers load the new card after each update. If your dashboard
+  resources are managed in YAML, change the card's URL to
+  `/hanchuess_card/hanchuess-energy-card.js`.
+
 ### Documentation
 - Added an [inverter status sensor recipe](docs/inverter-status.md)
   (Fast Charging / Scheduled Charge / Charging / Idle, etc.) built from
