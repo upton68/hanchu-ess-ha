@@ -391,3 +391,64 @@ show a status, not `unknown`.
 - "Scheduled" means the conditions for a scheduled charge or discharge are met,
   not a confirmation from the inverter. If you want to be strict, you could add
   a battery power check to those two options as well.
+
+## Variant: Predbat integration (Hanchu ESS)
+
+If the inverter is controlled by Predbat's built-in **Hanchu ESS** integration,
+Predbat writes the charge and discharge slots straight to the inverter through
+the Hanchu cloud. The slot time entities in this integration don't see those
+writes, so they stay at 00:00. With the automation above, a Predbat charge
+would then only ever show as **Charging** and a Predbat export as
+**Discharging**, never as Scheduled.
+
+In that setup, use Predbat's own status instead of the slot times. It reports
+what Predbat is telling the inverter to do.
+
+1. In the automation, replace the **Scheduled Charge** and **Scheduled
+   Discharge** options with:
+
+   ```yaml
+         - alias: Scheduled Charge
+           conditions:
+             - condition: template
+               value_template: "{{ states('predbat.status') is match('Charging') }}"
+           sequence:
+             - action: input_select.select_option
+               target:
+                 entity_id: input_select.hanchu_inverter_status
+               data:
+                 option: Scheduled Charge
+         - alias: Scheduled Discharge
+           conditions:
+             - condition: template
+               value_template: "{{ states('predbat.status') is match('Exporting|Discharging') }}"
+           sequence:
+             - action: input_select.select_option
+               target:
+                 entity_id: input_select.hanchu_inverter_status
+               data:
+                 option: Scheduled Discharge
+   ```
+
+2. Add a trigger so the automation runs whenever Predbat changes state:
+
+   ```yaml
+     - trigger: state
+       entity_id: predbat.status
+   ```
+
+3. Remove the two slot triggers (the `time.hanchuess_SERIAL_..._slot_...`
+   state trigger and the `sensor.hanchu_..._slot_...` time trigger), and the
+   twelve slot template sensors from Step 2. They're no longer used. Keep the
+   `Hanchu Inverter Status` template sensor.
+
+Notes for this variant:
+
+- If your Predbat instance uses a prefix other than `predbat`, change
+  `predbat.status` to match. Check in **Developer Tools → States**.
+- `match` checks the start of the status, so `Charging` matches but
+  `Hold charging` and `Freeze charging` don't. Those fall through to
+  Charging, Discharging or Idle based on battery power. Check which states
+  your Predbat shows during a charge and an export, and adjust the patterns
+  if needed.
+- This variant is only for Predbat's built-in Hanchu ESS integration.

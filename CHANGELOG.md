@@ -10,6 +10,12 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Documentation
+- Inverter status recipe: added a variant for systems controlled by
+  Predbat's built-in Hanchu ESS integration, which uses `predbat.status` for
+  the Scheduled Charge / Scheduled Discharge statuses, because Predbat's slot
+  writes aren't reflected in this integration's slot time entities.
+
 ## [2.3.1] - 2026-11-10
 
 ### Fixed
