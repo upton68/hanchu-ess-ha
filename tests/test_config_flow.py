@@ -285,6 +285,7 @@ async def test_options_flow_sets_options(hass: HomeAssistant):
                 "statistics_interval": 600,
                 "battery_interval": 900,
                 "fast_charge_duration": 45,
+                "schedule_interval": 120,
             },
         )
 
@@ -294,6 +295,7 @@ async def test_options_flow_sets_options(hass: HomeAssistant):
         "statistics_interval": 600,
         "battery_interval": 900,
         "fast_charge_duration": 45,
+        "schedule_interval": 120,
     }
 
 
@@ -317,6 +319,27 @@ async def test_options_flow_rejects_out_of_range(hass: HomeAssistant):
             },
         )
 
+    assert entry.options == {}
+
+
+async def test_options_flow_rejects_schedule_interval_below_minimum(hass: HomeAssistant):
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={"sn": "SN1", "token": "tok"}, unique_id="SN1"
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    with pytest.raises(InvalidData):
+        await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {
+                "realtime_interval": 60,
+                "statistics_interval": 600,
+                "battery_interval": 600,
+                "fast_charge_duration": 45,
+                "schedule_interval": 30,
+            },
+        )
     assert entry.options == {}
 
 

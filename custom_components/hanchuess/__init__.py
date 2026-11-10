@@ -24,6 +24,7 @@ from .coordinator import (
     HanchuessRealtimeCoordinator,
     HanchuessStatisticsCoordinator,
     HanchuessBatteryCoordinator,
+    HanchuessScheduleCoordinator,
 )
 from .staging import SettingsStagingBuffer
 
@@ -72,6 +73,16 @@ class HanchuessData:
     inverter_device_id: str
     # Resolved from getDeviceStatus devModel; None if missing or unknown.
     inverter_model: InverterModel | None = None
+    # Inverter's own slots/work mode/SOC limits, for the Inverter Status sensor.
+    schedule: HanchuessScheduleCoordinator | None = None
+
+
+def _note_written(entry, values: dict) -> None:
+    """Tell the schedule coordinator about settings written successfully."""
+    data = getattr(entry, "runtime_data", None)
+    schedule = getattr(data, "schedule", None) if data is not None else None
+    if schedule is not None:
+        schedule.note_written(values)
 
 
 type HanchuessConfigEntry = ConfigEntry[HanchuessData]
@@ -125,6 +136,7 @@ async def async_flush_staged(hass: HomeAssistant, entry) -> bool:
     result = await client.async_device_control(inverter_serial_number, "2", snapshot)
     if result.get("success"):
         staging.clear()
+        _note_written(entry, snapshot)
         _LOGGER.info("[HANCHUESS] Write Settings succeeded for %s", inverter_serial_number)
         return True
 
@@ -138,6 +150,7 @@ async def async_flush_staged(hass: HomeAssistant, entry) -> bool:
     result = await client.async_device_control(inverter_serial_number, "2", snapshot)
     if result.get("success"):
         staging.clear()
+        _note_written(entry, snapshot)
         _LOGGER.info("[HANCHUESS] Write Settings retry succeeded for %s", inverter_serial_number)
         return True
 
@@ -193,6 +206,7 @@ async def async_device_control_service(hass: HomeAssistant, call: ServiceCall) -
 
             apply_iot_values(entry, value)
             entry.runtime_data.staging.discard(value.keys())
+            _note_written(entry, value)
         else:
             _LOGGER.warning(
                 "[HANCHUESS] device_control: no config entry found for %s, "
@@ -456,6 +470,7 @@ async def ws_iot_set(hass, connection, msg):
 
             apply_iot_values(entry, value)
             entry.runtime_data.staging.discard(value.keys())
+            _note_written(entry, value)
         else:
             _LOGGER.warning(
                 "[HANCHUESS] ws_iot_set: no config entry found for %s, "
@@ -696,6 +711,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
         model=inverter_model.name if inverter_model else DEFAULT_MODEL_NAME,
     )
 
+    # Seed the schedule cache from the startup read so the status sensor is
+    # right immediately and the first extra iotGet waits a full interval.
+    schedule_coordinator = HanchuessScheduleCoordinator(hass, entry, client)
+    if startup_values:
+        schedule_coordinator.seed(startup_values)
+    else:
+        await schedule_coordinator.async_refresh()
+
     entry.runtime_data = HanchuessData(
         realtime=coordinator,
         statistics=stats_coordinator,
@@ -706,6 +729,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
         control_registry={},
         inverter_device_id=inverter_device.id,
         inverter_model=inverter_model,
+        schedule=schedule_coordinator,
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

@@ -5,6 +5,7 @@ from datetime import timedelta
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from .api import HanchuessApiClient, ReauthRequired
 from .const import (
@@ -12,6 +13,10 @@ from .const import (
     CONF_REALTIME_INTERVAL,
     CONF_STATISTICS_INTERVAL,
     CONF_BATTERY_INTERVAL,
+    CONF_SCHEDULE_INTERVAL,
+    DEFAULT_SCHEDULE_INTERVAL,
+    MIN_SCHEDULE_INTERVAL,
+    SCHEDULE_KEYS,
     DEFAULT_REALTIME_INTERVAL,
     DEFAULT_STATISTICS_INTERVAL,
     DEFAULT_BATTERY_INTERVAL,
@@ -191,3 +196,54 @@ class HanchuessBatteryCoordinator(DataUpdateCoordinator):
             self.hass.config_entries.async_update_entry(
                 entry, data={**entry.data, "token": token}
             )
+
+
+class HanchuessScheduleCoordinator(DataUpdateCoordinator):
+    """Polls the inverter's work mode, slots and SOC limits (default 5 min).
+
+    Feeds the Inverter Status sensor only. The values are kept in this
+    coordinator rather than written to the control entities, so a poll never
+    overwrites settings the user has staged but not yet written. Auth problems
+    are left to the realtime coordinator; a failed poll keeps the last values.
+    """
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: HanchuessApiClient):
+        interval = max(
+            int(entry.options.get(CONF_SCHEDULE_INTERVAL, DEFAULT_SCHEDULE_INTERVAL)),
+            MIN_SCHEDULE_INTERVAL,
+        )
+        super().__init__(
+            hass,
+            _LOGGER,
+            name="hanchuess_schedule",
+            config_entry=entry,
+            update_interval=timedelta(seconds=interval),
+        )
+        self.entry = entry
+        self.client = client
+        self.last_read = None  # when values were last read from the inverter
+
+    def seed(self, values: dict) -> None:
+        """Use values already read from the inverter (e.g. at startup)."""
+        seeded = {k: v for k, v in values.items() if k in SCHEDULE_KEYS}
+        if seeded:
+            self.last_read = dt_util.utcnow()
+            self.async_set_updated_data(seeded)
+
+    async def _async_update_data(self) -> dict:
+        values = await self.client.async_iot_get(
+            self.entry.data["sn"], "2", SCHEDULE_KEYS
+        )
+        if values:
+            self.last_read = dt_util.utcnow()
+            return {**(self.data or {}), **values}
+        if self.data:
+            _LOGGER.debug("[HANCHUESS] Schedule poll returned nothing, keeping last values")
+            return self.data
+        raise UpdateFailed("Failed to read inverter schedule")
+
+    def note_written(self, values: dict) -> None:
+        """Merge settings this integration has just written successfully."""
+        written = {k: v for k, v in values.items() if k in SCHEDULE_KEYS}
+        if written:
+            self.async_set_updated_data({**(self.data or {}), **written})

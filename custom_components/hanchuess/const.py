@@ -15,7 +15,24 @@ CONF_REALTIME_INTERVAL = "realtime_interval"
 CONF_STATISTICS_INTERVAL = "statistics_interval"
 CONF_BATTERY_INTERVAL = "battery_interval"
 CONF_FAST_CHARGE_DURATION = "fast_charge_duration"
+CONF_SCHEDULE_INTERVAL = "schedule_interval"
 DEFAULT_REALTIME_INTERVAL = 60        # seconds
 DEFAULT_STATISTICS_INTERVAL = 300     # seconds
 DEFAULT_BATTERY_INTERVAL = 600        # seconds
 DEFAULT_FAST_CHARGE_DURATION = 60     # minutes
+DEFAULT_SCHEDULE_INTERVAL = 300       # seconds
+MIN_SCHEDULE_INTERVAL = 60            # seconds
+
+# Inverter settings polled for the Inverter Status sensor (work mode, the SOC
+# limits that stop a scheduled charge/discharge, and the six slots).
+SCHEDULE_KEYS = [
+    "WORK_MODE_CMB",
+    "DTU_AC_CHG_SOC_LMT",
+    "DSCHG_BAT_SOC_LMT",
+    "TCT_START_1", "TCT_END_1",
+    "TCT_START_2", "TCT_END_2",
+    "TCT_START_3", "TCT_END_3",
+    "TDT_START_1", "TDT_END_1",
+    "TDT_START_2", "TDT_END_2",
+    "TDT_START_3", "TDT_END_3",
+]

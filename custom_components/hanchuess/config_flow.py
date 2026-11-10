@@ -18,6 +18,9 @@ from .const import (
     DEFAULT_STATISTICS_INTERVAL,
     DEFAULT_BATTERY_INTERVAL,
     DEFAULT_FAST_CHARGE_DURATION,
+    CONF_SCHEDULE_INTERVAL,
+    DEFAULT_SCHEDULE_INTERVAL,
+    MIN_SCHEDULE_INTERVAL,
 )
 from .battery import extract_battery_serials
 from .api import HanchuessApiClient
@@ -278,6 +281,12 @@ class HanchuessOptionsFlow(OptionsFlowWithReload):
                 CONF_FAST_CHARGE_DURATION,
                 default=options.get(CONF_FAST_CHARGE_DURATION, DEFAULT_FAST_CHARGE_DURATION),
             ): vol.All(vol.Coerce(int), vol.Range(min=5, max=240)),
+            vol.Required(
+                CONF_SCHEDULE_INTERVAL,
+                default=options.get(CONF_SCHEDULE_INTERVAL, DEFAULT_SCHEDULE_INTERVAL),
+            ): vol.All(
+                vol.Coerce(int), vol.Range(min=MIN_SCHEDULE_INTERVAL, max=3600)
+            ),
         })
 
         return self.async_show_form(step_id="init", data_schema=data_schema)

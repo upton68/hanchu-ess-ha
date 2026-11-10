@@ -45,7 +45,8 @@
           "realtime_interval": "Realtime poll interval (seconds)",
           "statistics_interval": "Statistics poll interval (seconds)",
           "battery_interval": "Battery poll interval (seconds)",
-          "fast_charge_duration": "Fast charge/discharge duration (minutes)"
+          "fast_charge_duration": "Fast charge/discharge duration (minutes)",
+          "schedule_interval": "Inverter status schedule poll interval (seconds)"
         }
       }
     }
@@ -53,6 +54,18 @@
   "entity": {
     "sensor": {
       "device_status": { "name": "Device Status" },
+      "inverter_status": {
+        "name": "Inverter Status",
+        "state": {
+          "fast_charging": "Fast Charging",
+          "fast_discharging": "Fast Discharging",
+          "scheduled_charge": "Scheduled Charge",
+          "scheduled_discharge": "Scheduled Discharge",
+          "charging": "Charging",
+          "discharging": "Discharging",
+          "idle": "Idle"
+        }
+      },
       "battery_soc": { "name": "Battery SOC" },
       "battery_power": { "name": "Battery Power" },
       "battery_charge_power": { "name": "Battery Charge Power" },

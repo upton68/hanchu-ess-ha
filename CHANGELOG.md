@@ -10,6 +10,15 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Added
+- **Inverter Status** sensor: Fast Charging, Fast Discharging, Scheduled
+  Charge, Scheduled Discharge, Charging, Discharging or Idle. The work mode,
+  slots and SOC limits are read from the inverter every 5 minutes, so slots
+  set by Predbat's Hanchu ESS integration, the Hanchu app or the web console
+  are picked up too; changes made through this integration apply immediately.
+  The poll interval can be lowered to 1 minute in Options. Disabling the
+  sensor stops the extra poll. Based on @lancedfr's recipe (#33).
+
 ### Documentation
 - Inverter status recipe: added a variant for systems controlled by
   Predbat's built-in Hanchu ESS integration, which uses `predbat.status` for

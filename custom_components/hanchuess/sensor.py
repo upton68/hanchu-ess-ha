@@ -19,6 +19,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.util import dt as dt_util
+from .status import STATUS_OPTIONS, compute_inverter_status
 from .models import (
     battery_model_name,
     inverter_model_name,
@@ -435,6 +437,7 @@ async def async_setup_entry(
     battery_coordinator = data.battery
     entities = []
     entities.append(DeviceStatusSensor(realtime, entry))
+    entities.append(InverterStatusSensor(realtime, entry))
     for sensor_key, config in SENSORS.items():
         cond_key = config.get("condition_key")
         if cond_key:
@@ -575,6 +578,66 @@ class BatterySensor(CoordinatorEntity, SensorEntity):
             return round(float(value), 3)
         except (ValueError, TypeError):
             return value
+
+
+class InverterStatusSensor(CoordinatorEntity, SensorEntity):
+    """What the battery is doing now: fast, scheduled, charging, discharging or idle.
+
+    Updates with the realtime coordinator and whenever the schedule
+    coordinator reads new slot/work-mode values from the inverter.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "inverter_status"
+    _attr_icon = "mdi:battery-sync"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = STATUS_OPTIONS
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"{entry.data['sn']}_inverter_status"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        inverter_serial_number = self._entry.data["sn"]
+        return DeviceInfo(
+            identifiers={(DOMAIN, inverter_serial_number)},
+            name=f"Hanchuess {inverter_serial_number}",
+            manufacturer="Hanchu",
+            model=inverter_model_name(self._entry),
+        )
+
+    def _schedule(self):
+        data = getattr(self._entry, "runtime_data", None)
+        return getattr(data, "schedule", None) if data is not None else None
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        schedule = self._schedule()
+        if schedule is not None:
+            self.async_on_remove(
+                schedule.async_add_listener(self._handle_coordinator_update)
+            )
+
+    @property
+    def native_value(self):
+        realtime = self.coordinator.data or {}
+        battery_power = _scale_auto_watt(realtime.get("batP"), realtime.get("batPUnit"))
+        schedule = self._schedule()
+        return compute_inverter_status(
+            realtime,
+            schedule.data if schedule is not None else None,
+            dt_util.now().time(),
+            battery_power,
+        )
+
+    @property
+    def extra_state_attributes(self):
+        schedule = self._schedule()
+        if schedule is None or schedule.last_read is None:
+            return None
+        return {"schedule_last_read": schedule.last_read.isoformat()}
 
 
 class DeviceStatusSensor(CoordinatorEntity, SensorEntity):
