@@ -27,6 +27,7 @@ published by Hanchu (Guoxia Technology, the manufacturer) which has had few upda
 - Daily Load/PV Energy (kWh)
 - Daily DG Energy (kWh) — only available when generator support is present
 - Device Status (online/offline/pending)
+- Inverter Status: Fast Charging, Fast Discharging, Scheduled Charge, Scheduled Discharge, Charging, Discharging or Idle, see [Inverter Status Sensor](#inverter-status-sensor)
 - Inverter Model, Rated AC Power (W) and Battery Power Maximum (W), diagnostic, see [Inverter model detection](#inverter-model-detection)
 
 ### Controls (fully automatable)
@@ -244,6 +245,9 @@ After setup, open the integration and click **Configure** to adjust:
 - **Battery poll interval** (default 10 min / 600 s, minimum 5 min)
 - **Fast charge/discharge duration** (default 60 min, range 5 min–4 h) — the
   duration applied when the Fast Charge / Fast Discharge switches are turned on
+- **Inverter status schedule poll interval** (default 5 min / 300 s, minimum
+  1 min). How often the inverter's work mode, slots and SOC limits are read for
+  the Inverter Status sensor
 
 Changing an option reloads the device so the new values take effect immediately.
 
@@ -274,6 +278,7 @@ After initial setup, polling intervals and fast charge duration can be adjusted 
 | Statistics poll interval | 300s | 300–86400s | How often daily energy totals are refreshed |
 | Battery poll interval | 600s | 300–86400s | How often per-battery-pack diagnostics sensors are refreshed |
 | Fast charge duration | 60 min | 5–240 min | Default duration when triggering fast charge/discharge |
+| Inverter status schedule poll interval | 300s | 60–3600s | How often the inverter's work mode, slots and SOC limits are read for the Inverter Status sensor |
 
 ## Predbat Integration
 
@@ -283,11 +288,37 @@ Full setup instructions, including the bridge script, helper configuration, `app
 
 ## Inverter Status Sensor
 
-Want a single sensor showing whether the battery is fast charging, running a
-scheduled charge or discharge, charging from solar, or idle? See the
-[inverter status sensor recipe](docs/inverter-status.md). It's built from
-Home Assistant helpers, template sensors and one automation, so you can adapt
-it to your setup. Contributed by [@lancedfr](https://github.com/lancedfr).
+`sensor.hanchuess_<serial>_inverter_status` shows what the battery is doing
+right now. The statuses are checked in this order, so a fast charge wins over a
+schedule, and a schedule wins over plain charging:
+
+| Status | When |
+|---|---|
+| **Fast Charging / Fast Discharging** | A fast charge or discharge is running |
+| **Scheduled Charge** | Work mode is User-defined, the time is inside an active charge slot, and the SOC is below the Grid to Battery Charge Maximum |
+| **Scheduled Discharge** | Work mode is User-defined, the time is inside an active discharge slot, and the SOC is above the Minimum Discharge SOC |
+| **Charging / Discharging** | Battery power is above +20 W / below −20 W (e.g. charging from solar) |
+| **Idle** | None of the above |
+
+The work mode, slots and SOC limits are read from the inverter itself every
+5 minutes (adjustable down to 1 minute in **Options**), so slots set by
+anything else, such as Predbat's Hanchu ESS integration, the Hanchu app or the
+web console, are picked up too. A slot only counts as switched off when both
+its start and end are 00:00. Fast charge and battery power update with every
+realtime poll.
+
+Notes:
+- **Scheduled** means the conditions for a scheduled charge or discharge are
+  met. The inverter doesn't report it directly.
+- After a slot is changed outside this integration, the status can take up to
+  one schedule poll interval to follow. Changes made through this integration
+  are picked up immediately.
+- If you don't use the sensor, disable it. The schedule is then no longer
+  polled.
+
+The original YAML version, contributed by
+[@lancedfr](https://github.com/lancedfr), is still available as a
+[recipe](docs/inverter-status.md) if you want to customise the logic.
 
 ## Development
 

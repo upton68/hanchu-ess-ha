@@ -45,7 +45,8 @@
           "realtime_interval": "实时轮询间隔（秒）",
           "statistics_interval": "统计轮询间隔（秒）",
           "battery_interval": "电池轮询间隔（秒）",
-          "fast_charge_duration": "快充/快放时长（分钟)"
+          "fast_charge_duration": "快充/快放时长（分钟)",
+          "schedule_interval": "逆变器状态计划轮询间隔（秒）"
         }
       }
     }
@@ -53,6 +54,18 @@
   "entity": {
     "sensor": {
       "device_status": { "name": "设备状态" },
+      "inverter_status": {
+        "name": "逆变器状态",
+        "state": {
+          "fast_charging": "快速充电",
+          "fast_discharging": "快速放电",
+          "scheduled_charge": "定时充电",
+          "scheduled_discharge": "定时放电",
+          "charging": "充电中",
+          "discharging": "放电中",
+          "idle": "空闲"
+        }
+      },
       "battery_soc": { "name": "电池电量" },
       "battery_power": { "name": "电池功率" },
       "battery_charge_power": { "name": "电池充电功率" },

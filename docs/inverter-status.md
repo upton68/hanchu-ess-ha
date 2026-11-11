@@ -1,5 +1,11 @@
 # Inverter status sensor
 
+> **The integration now includes this as a built-in sensor,**
+> `sensor.hanchuess_<serial>_inverter_status`, which reads the slots from the
+> inverter itself, so it also works when Predbat or the Hanchu app sets them.
+> See [Inverter Status Sensor](../README.md#inverter-status-sensor). This
+> recipe remains for anyone who wants to customise the logic.
+
 This recipe creates `sensor.hanchu_inverter_status`, which shows what the
 battery is doing right now:
 
