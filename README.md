@@ -282,9 +282,9 @@ After initial setup, polling intervals and fast charge duration can be adjusted 
 
 ## Predbat Integration
 
-The Hanchu iESS works with [Predbat](https://github.com/springfall2008/batpred) — a Home Assistant battery prediction and optimisation add-on — via Predbat's generic Service API.
+[Predbat](https://github.com/springfall2008/batpred) — a Home Assistant battery prediction and optimisation add-on — has its own native Hanchu component (v9.7.10 or later), which talks to the Hanchu cloud directly. **For a new install, use that** — see [Hanchu ESS Cloud](https://springfall2008.github.io/batpred/inverter-setup/#hanchu-ess-cloud) in the Predbat docs. It doesn't need this integration, although the two can run side by side.
 
-Full setup instructions, including the bridge script, helper configuration, `apps.yaml` template, and `configuration.yaml` additions, are documented in the [Predbat inverter setup docs](https://springfall2008.github.io/batpred/inverter-setup/#hanchu-iess).
+The older setup, which drives Predbat through this integration with a bridge script via Predbat's generic Service API, is kept for existing users in [docs/predbat-bridge.md](docs/predbat-bridge.md), with its `apps.yaml` template in [docs/hanchu_cloud.yaml](docs/hanchu_cloud.yaml).
 
 ## Inverter Status Sensor
 
