@@ -10,6 +10,14 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Documentation
+- Predbat bridge setup moved here from the Predbat docs as
+  [docs/predbat-bridge.md](docs/predbat-bridge.md), with its `apps.yaml`
+  template [docs/hanchu_cloud.yaml](docs/hanchu_cloud.yaml). It includes the
+  placeholder charge/discharge rate helpers and a note on EV chargers wired
+  outside the Hanchu meter. The README now points new installs at Predbat's
+  native Hanchu component (v9.7.10 or later).
+
 ## [2.4.0] - 2026-11-11
 
 ### Added
