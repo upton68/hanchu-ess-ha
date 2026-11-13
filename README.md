@@ -14,6 +14,7 @@ published by Hanchu (Guoxia Technology, the manufacturer) which has had few upda
 - Battery Discharge Power (W) — discharge only derived power
 - Battery Capacity (kWh)
 - Battery pack sensors (per discovered battery serial): Battery Model (diagnostic, see [Battery model detection](#battery-model-detection)), Pack SOC (%), Pack SOH (%), Pack Voltage (V), Pack Current (A), Design Capacity (kWh), Full Capacity (Ah), Remaining Capacity (Ah), Temperature 1-N (degC, based on `numBatT`), Environment Temperature, Pack Temperature, MOS Temperature
+- Battery cell sensors (per battery, when the battery reports cell data): Max Cell Voltage (V), Min Cell Voltage (V) and Cell Voltage Difference (shown in mV), plus Cell 1-N Voltage (V, based on `numBat`, **disabled by default**). A growing cell voltage difference, or one cell sitting consistently below the others, is the usual sign of an imbalanced or weak battery. Enable the individual cell sensors on a battery's device page when you want to look closer
 - Grid Power (W) — signed (positive = import, negative = export)
 - Grid Import Power (W) — import only derived power
 - Grid Export Power (W) — export only derived power

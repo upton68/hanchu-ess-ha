@@ -268,6 +268,37 @@ BATTERY_SENSORS = {
     },
 }
 
+# Cell-level voltage spread from queryBatteryDataDivisions. Created for a
+# battery only when its data includes cell voltages. If a field is missing it is
+# worked out from the individual cell voltages (vBat1..vBatN).
+CELL_STAT_SENSORS = {
+    "battery_cell_voltage_max": {
+        "stat": "max",
+        "device_class": SensorDeviceClass.VOLTAGE,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "unit": UnitOfElectricPotential.VOLT,
+        "precision": 3,
+        "icon": "mdi:arrow-collapse-up",
+    },
+    "battery_cell_voltage_min": {
+        "stat": "min",
+        "device_class": SensorDeviceClass.VOLTAGE,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "unit": UnitOfElectricPotential.VOLT,
+        "precision": 3,
+        "icon": "mdi:arrow-collapse-down",
+    },
+    "battery_cell_voltage_difference": {
+        "stat": "diff",
+        "device_class": SensorDeviceClass.VOLTAGE,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "unit": UnitOfElectricPotential.VOLT,
+        "suggested_unit": UnitOfElectricPotential.MILLIVOLT,
+        "precision": 0,
+        "icon": "mdi:arrow-expand-vertical",
+    },
+}
+
 STATUS_MAP = {
     0: "offline",
     1: "online",
@@ -419,6 +450,61 @@ def _derive_directional_power(value, mode):
     return 0.0 if result == 0 else result
 
 
+def _float_or_none(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _cell_voltages(battery_data: dict) -> list[float]:
+    """Individual cell voltages (vBat1..vBatN) that carry a number."""
+    voltages = []
+    for index in range(1, _battery_cell_count(battery_data) + 1):
+        value = _float_or_none(battery_data.get(f"vBat{index}"))
+        if value is not None:
+            voltages.append(value)
+    return voltages
+
+
+def _battery_cell_count(battery_data: dict) -> int:
+    """Number of cells to surface: numBat, or the vBatN fields present."""
+    count = _float_or_none(battery_data.get("numBat"))
+    if count is not None and count > 0:
+        return int(count)
+    index = 0
+    while f"vBat{index + 1}" in battery_data:
+        index += 1
+    return index
+
+
+def _has_cell_data(battery_data: dict) -> bool:
+    return bool(
+        _cell_voltages(battery_data)
+        or battery_data.get("maxVoltage") is not None
+        or battery_data.get("minVoltage") is not None
+    )
+
+
+def cell_voltage_stat(battery_data: dict, stat: str):
+    """Max, min or difference of the cell voltages, in volts."""
+    cells = _cell_voltages(battery_data)
+    high = _float_or_none(battery_data.get("maxVoltage"))
+    low = _float_or_none(battery_data.get("minVoltage"))
+    if high is None and cells:
+        high = max(cells)
+    if low is None and cells:
+        low = min(cells)
+    if stat == "max":
+        return high
+    if stat == "min":
+        return low
+    diff = _float_or_none(battery_data.get("maxVoltageDifference"))
+    if diff is None and high is not None and low is not None:
+        diff = high - low
+    return None if diff is None else round(diff, 4)
+
+
 def _battery_temperature_count(battery_data: dict) -> int:
     """Return the number of tBat sensors to surface for a battery."""
     try:
@@ -468,6 +554,19 @@ async def async_setup_entry(
             entities.append(
                 BatteryModelSensor(battery_coordinator, entry, battery_serial)
             )
+            if _has_cell_data(battery_data):
+                for sensor_key, config in CELL_STAT_SENSORS.items():
+                    entities.append(
+                        BatteryCellStatSensor(
+                            battery_coordinator, entry, battery_serial, sensor_key, config
+                        )
+                    )
+                for cell in range(1, _battery_cell_count(battery_data) + 1):
+                    entities.append(
+                        BatteryCellVoltageSensor(
+                            battery_coordinator, entry, battery_serial, cell
+                        )
+                    )
             for sensor_key, config in BATTERY_SENSORS.items():
                 if (
                     sensor_key.startswith("battery_temperature_")
@@ -578,6 +677,45 @@ class BatterySensor(CoordinatorEntity, SensorEntity):
             return round(float(value), 3)
         except (ValueError, TypeError):
             return value
+
+
+class BatteryCellStatSensor(BatterySensor):
+    """Highest cell voltage, lowest cell voltage or the spread between them."""
+
+    def __init__(self, coordinator, entry, battery_serial, sensor_key, config):
+        super().__init__(coordinator, entry, battery_serial, sensor_key, config)
+        self._attr_suggested_display_precision = config.get("precision")
+        if config.get("suggested_unit"):
+            self._attr_suggested_unit_of_measurement = config["suggested_unit"]
+
+    @property
+    def native_value(self):
+        battery_data = self.coordinator.data.get(self._battery_serial, {})
+        return cell_voltage_stat(battery_data, self._config["stat"])
+
+
+class BatteryCellVoltageSensor(BatterySensor):
+    """One cell's voltage. Disabled by default: enable when investigating."""
+
+    _attr_entity_registry_enabled_default = False
+    _attr_suggested_display_precision = 3
+
+    def __init__(self, coordinator, entry, battery_serial, cell: int):
+        super().__init__(
+            coordinator,
+            entry,
+            battery_serial,
+            f"battery_cell_voltage_{cell}",
+            {
+                "key": f"vBat{cell}",
+                "device_class": SensorDeviceClass.VOLTAGE,
+                "state_class": SensorStateClass.MEASUREMENT,
+                "unit": UnitOfElectricPotential.VOLT,
+                "icon": "mdi:battery-outline",
+            },
+        )
+        self._attr_translation_key = "battery_cell_voltage"
+        self._attr_translation_placeholders = {"cell": str(cell)}
 
 
 class InverterStatusSensor(CoordinatorEntity, SensorEntity):

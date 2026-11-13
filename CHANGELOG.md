@@ -10,6 +10,12 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Added
+- **Battery cell sensors** for each battery that reports cell data: Max Cell
+  Voltage, Min Cell Voltage and Cell Voltage Difference (shown in mV), plus
+  one voltage sensor per cell (Cell 1-N Voltage), disabled by default. Useful
+  for spotting imbalanced or weak batteries (#61).
+
 ### Documentation
 - Predbat bridge setup moved here from the Predbat docs as
   [docs/predbat-bridge.md](docs/predbat-bridge.md), with its `apps.yaml`
