@@ -11,5 +11,5 @@
     "loggers": ["custom_components.hanchuess"],
     "quality_scale": "bronze",
     "requirements": [],
-    "version": "2.6.0-beta.1"
+    "version": "2.6.0-beta.2"
 }

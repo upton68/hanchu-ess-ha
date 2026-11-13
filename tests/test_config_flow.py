@@ -686,3 +686,25 @@ async def test_flow_prefers_hanchu_inverter_when_present(hass: HomeAssistant):
     client.async_get_stations.assert_not_called()
 
 
+
+
+async def test_options_flow_battery_only_shows_battery_interval_only(hass: HomeAssistant):
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id="station_ST1",
+        data={"mode": "battery_only", "stationId": "ST1", "battery_serials": ["B1"]},
+    )
+    entry.add_to_hass(hass)
+    with patch.object(hass.config_entries, "async_schedule_reload", MagicMock()):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        keys = [str(k) for k in result["data_schema"].schema]
+        assert keys == ["battery_interval"]
+        with pytest.raises(InvalidData):
+            await hass.config_entries.options.async_configure(
+                result["flow_id"], {"battery_interval": 30}
+            )
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        done = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"battery_interval": 60}
+        )
+    assert done["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options == {"battery_interval": 60}

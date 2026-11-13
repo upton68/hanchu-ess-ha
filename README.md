@@ -303,8 +303,10 @@ You get:
   Voltage)
 
 There are no inverter sensors, controls, Inverter Status or Remote Settings
-card in this mode, since the inverter isn't Hanchu's. Battery data is polled at
-the **Battery poll interval** (default 10 minutes).
+card in this mode, since the inverter isn't Hanchu's. Battery data is polled
+every **60 seconds** by default; change it under **Configure** (minimum 60
+seconds). If a battery's detail data isn't available from the cloud, its SOC,
+SOH and model are still shown, taken from the station list.
 
 This mode relies on the Hanchu web console's station and battery endpoints. If
 Hanchu changes those, battery-only stations can stop updating until the

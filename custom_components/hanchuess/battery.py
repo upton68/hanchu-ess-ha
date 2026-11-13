@@ -55,6 +55,36 @@ def battery_only_serials(station_detail: dict | None) -> list[str]:
     return extract_battery_serials(station_detail)
 
 
+def battery_dev_ids(station_detail: dict | None) -> dict[str, str]:
+    """Map battery sn -> devId from a station's bmsList.
+
+    The battery detail call takes a device ID. For most batteries devId equals
+    sn, but it may not for every battery (e.g. warranty replacements).
+    """
+    ids = {}
+    for item in _station_data(station_detail).get("bmsList") or []:
+        sn = item.get("sn")
+        dev_id = item.get("devId")
+        if sn and dev_id:
+            ids[sn] = dev_id
+    return ids
+
+
+def station_battery_values(station_detail: dict | None) -> dict[str, dict]:
+    """Per-battery values the station list carries (SOC, SOH, model, online)."""
+    values = {}
+    for item in _station_data(station_detail).get("bmsList") or []:
+        sn = item.get("sn")
+        if not sn:
+            continue
+        values[sn] = {
+            k: item[k]
+            for k in ("socPack", "sohPack", "devModel", "onlineStatus", "softwareVer")
+            if item.get(k) is not None
+        }
+    return values
+
+
 def _short(value) -> str:
     text = str(value or "")
     return f"{text[:5]}…" if len(text) > 5 else text
@@ -81,6 +111,7 @@ def station_summary(station_detail: dict | None) -> dict:
         "batteries": [
             {
                 "sn": _short(b.get("sn")),
+                "dev_id_differs": bool(b.get("devId")) and b.get("devId") != b.get("sn"),
                 "logger": _short(b.get("dtuSn")),
                 "adr": b.get("adr"),
                 "dev_model": b.get("devModel"),

@@ -22,6 +22,9 @@ CONF_SCHEDULE_INTERVAL = "schedule_interval"
 DEFAULT_REALTIME_INTERVAL = 60        # seconds
 DEFAULT_STATISTICS_INTERVAL = 300     # seconds
 DEFAULT_BATTERY_INTERVAL = 600        # seconds
+# Battery-only stations: the batteries are the only data, so poll faster.
+DEFAULT_BATTERY_ONLY_INTERVAL = 60    # seconds
+MIN_BATTERY_ONLY_INTERVAL = 60        # seconds
 DEFAULT_FAST_CHARGE_DURATION = 60     # minutes
 DEFAULT_SCHEDULE_INTERVAL = 300       # seconds
 MIN_SCHEDULE_INTERVAL = 60            # seconds

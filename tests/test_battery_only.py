@@ -211,3 +211,132 @@ async def test_diagnostics_include_station_summary(hass: HomeAssistant):
     assert diag["entry"]["data"]["token"] == "**REDACTED**"
     assert diag["entry"]["data"]["stationName"] == "**REDACTED**"
     assert diag["entry"]["data"]["mode"] == "battery_only"
+
+
+# --- beta.2: devId lookup, station fallback, polling, precision ------------------
+
+from custom_components.hanchuess.battery import (  # noqa: E402
+    battery_dev_ids,
+    station_battery_values,
+)
+from custom_components.hanchuess.coordinator import HanchuessBatteryCoordinator  # noqa: E402
+
+DETAIL_OK = {"code": 200, "success": True, "data": {"sn": "x", "vPack": "53.24", "socPack": "88.1"}}
+EMPTY = {"code": 200, "success": True, "data": {}}
+FAILED = {"code": 100, "success": False, "msg": "device not found"}
+
+
+def test_battery_dev_ids_and_station_values():
+    detail = _station([], [
+        {**_bms("B1"), "devId": "B1"},
+        {**_bms("B2"), "devId": "D2", "sohPack": 100},
+    ])
+    assert battery_dev_ids(detail) == {"B1": "B1", "B2": "D2"}
+    values = station_battery_values(detail)
+    assert values["B2"] == {"socPack": 88.1, "sohPack": 100, "devModel": "3", "onlineStatus": "1"}
+    summary = station_summary(detail)
+    assert [b["dev_id_differs"] for b in summary["batteries"]] == [False, True]
+
+
+def _coordinator(hass, client, mode="battery_only", serials=("B1", "B2"), options=None):
+    data = {"token": "t", "stationId": "ST1", "battery_serials": list(serials)}
+    if mode:
+        data["mode"] = mode
+    else:
+        data["sn"] = "SN1"
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=options or {})
+    entry.add_to_hass(hass)
+    return HanchuessBatteryCoordinator(hass, entry, client)
+
+
+def _poll_client(station, by_id):
+    client = MagicMock()
+    client.async_get_station_detail = AsyncMock(return_value=station)
+    client.async_get_battery_data = AsyncMock(side_effect=lambda dev_id, lang="en": by_id.get(dev_id, EMPTY))
+    return client
+
+
+async def test_battery_queried_by_dev_id(hass: HomeAssistant):
+    station = _station([], [{**_bms("B1"), "devId": "B1"}, {**_bms("B2"), "devId": "D2"}])
+    client = _poll_client(station, {"B1": DETAIL_OK, "D2": DETAIL_OK})
+    coordinator = _coordinator(hass, client)
+    data = await coordinator._async_update_data()
+    assert data["B2"]["vPack"] == "53.24"
+    queried = [c.args[0] for c in client.async_get_battery_data.await_args_list]
+    assert "D2" in queried and "B2" not in queried
+    assert coordinator.battery_status["B2"] == {
+        "queried_by": "devId", "dev_id_differs": True, "ok": True, "source": "detail", "error": None}
+
+
+async def test_battery_falls_back_to_sn_when_dev_id_empty(hass: HomeAssistant):
+    station = _station([], [{**_bms("B1"), "devId": "B1"}, {**_bms("B2"), "devId": "D2"}])
+    client = _poll_client(station, {"B1": DETAIL_OK, "D2": EMPTY, "B2": DETAIL_OK})
+    coordinator = _coordinator(hass, client)
+    data = await coordinator._async_update_data()
+    assert data["B2"]["vPack"] == "53.24"
+    assert coordinator.battery_status["B2"]["queried_by"] == "sn"
+
+
+async def test_missing_detail_falls_back_to_station_soc(hass: HomeAssistant):
+    station = _station([], [{**_bms("B1", soc=1.99), "devId": "B1"}, {**_bms("B2", soc=10.25), "devId": "B2"}])
+    client = _poll_client(station, {"B1": DETAIL_OK, "B2": FAILED})
+    coordinator = _coordinator(hass, client)
+    data = await coordinator._async_update_data()
+    assert data["B1"]["vPack"] == "53.24"
+    assert data["B2"]["socPack"] == 10.25
+    assert data["B2"]["devModel"] == "3"
+    assert "vPack" not in data["B2"]
+    status = coordinator.battery_status["B2"]
+    assert status["source"] == "station" and status["ok"] is True
+    assert status["error"] == "code=100 msg=device not found"
+
+
+async def test_normal_mode_does_not_read_station_each_poll(hass: HomeAssistant):
+    client = _poll_client({}, {"B1": DETAIL_OK, "B2": EMPTY})
+    coordinator = _coordinator(hass, client, mode=None)
+    data = await coordinator._async_update_data()
+    client.async_get_station_detail.assert_not_called()
+    assert "B2" not in data
+    assert coordinator.battery_status["B2"] == {
+        "queried_by": "sn", "dev_id_differs": False, "ok": False, "source": None, "error": "empty data"}
+
+
+async def test_battery_only_polls_every_minute_by_default(hass: HomeAssistant):
+    client = _poll_client({}, {})
+    assert _coordinator(hass, client).update_interval.total_seconds() == 60
+    assert _coordinator(hass, client, mode=None).update_interval.total_seconds() == 600
+    assert _coordinator(hass, client, options={"battery_interval": 120}).update_interval.total_seconds() == 120
+
+
+def test_battery_sensors_have_display_precision():
+    from custom_components.hanchuess.sensor import BATTERY_SENSORS, BatterySensor
+
+    coordinator = MagicMock()
+    coordinator.data = {"B1": {"vPack": "53.24"}}
+    entry = SimpleNamespace(data={}, runtime_data=SimpleNamespace(inverter_device_id="d"))
+    voltage = BatterySensor(coordinator, entry, "B1", "battery_voltage", BATTERY_SENSORS["battery_voltage"])
+    assert voltage.suggested_display_precision == 2
+    assert voltage.native_value == 53.24
+    current = BatterySensor(coordinator, entry, "B1", "battery_current", BATTERY_SENSORS["battery_current"])
+    assert current.suggested_display_precision == 2
+
+
+async def test_diagnostics_include_battery_status(hass: HomeAssistant):
+    from custom_components.hanchuess.staging import SettingsStagingBuffer
+
+    entry = _battery_entry(serials=["B1", "B2"])
+    entry.add_to_hass(hass)
+    battery = MagicMock()
+    battery.data = {"B1": {"socPack": "1"}}
+    battery.battery_status = {"B1": {"ok": True}, "B2": {"ok": False, "error": "empty data"}}
+    battery.station_detail = _station([LUX_PLACEHOLDER], [_bms("B1"), _bms("B2")])
+    entry.runtime_data = hanchuess.HanchuessData(
+        realtime=None, statistics=None, battery=battery, number_limits={},
+        startup_values={}, staging=SettingsStagingBuffer(), control_registry={},
+        inverter_device_id="dev1", battery_only=True, station_summary=None,
+    )
+    diag = await async_get_config_entry_diagnostics(hass, entry)
+    assert diag["battery_status"] == {
+        "battery_1": {"ok": True}, "battery_2": {"ok": False, "error": "empty data"}}
+    assert len(diag["station_summary"]["batteries"]) == 2
+    assert "B1" not in repr(diag["battery_status"])

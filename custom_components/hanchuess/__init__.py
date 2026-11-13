@@ -19,7 +19,7 @@ from .const import (
     MODE_BATTERY_ONLY,
 )
 from .api import HanchuessApiClient
-from .battery import merge_battery_serials, station_summary
+from .battery import battery_dev_ids, merge_battery_serials, station_summary
 from .models import (
     DEFAULT_MODEL_NAME,
     InverterModel,
@@ -813,6 +813,7 @@ async def _async_setup_battery_only(
         raise ConfigEntryNotReady("No batteries found for this station")
 
     battery_coordinator = HanchuessBatteryCoordinator(hass, entry, client)
+    battery_coordinator.dev_ids.update(battery_dev_ids(station_detail))
     await _async_initial_refresh(battery_coordinator, entry)
 
     station_name = entry.data.get("stationName") or "Hanchu"

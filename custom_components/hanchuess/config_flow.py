@@ -22,6 +22,8 @@ from .const import (
     CONF_SCHEDULE_INTERVAL,
     DEFAULT_SCHEDULE_INTERVAL,
     MIN_SCHEDULE_INTERVAL,
+    DEFAULT_BATTERY_ONLY_INTERVAL,
+    MIN_BATTERY_ONLY_INTERVAL,
 )
 from .battery import battery_only_serials, extract_battery_serials
 from .api import HanchuessApiClient
@@ -341,6 +343,23 @@ class HanchuessOptionsFlow(OptionsFlowWithReload):
             return self.async_create_entry(title="", data=user_input)
 
         options = self.config_entry.options
+        if self.config_entry.data.get("mode") == MODE_BATTERY_ONLY:
+            # Battery-only stations only have the battery poll.
+            return self.async_show_form(
+                step_id="init",
+                data_schema=vol.Schema({
+                    vol.Required(
+                        CONF_BATTERY_INTERVAL,
+                        default=options.get(
+                            CONF_BATTERY_INTERVAL, DEFAULT_BATTERY_ONLY_INTERVAL
+                        ),
+                    ): vol.All(
+                        vol.Coerce(int),
+                        vol.Range(min=MIN_BATTERY_ONLY_INTERVAL, max=86400),
+                    ),
+                }),
+            )
+
         data_schema = vol.Schema({
             vol.Required(
                 CONF_REALTIME_INTERVAL,

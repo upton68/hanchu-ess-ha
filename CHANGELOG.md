@@ -10,6 +10,30 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.6.0-beta.2] - 2026-11-13
+
+Second beta for battery-only stations, from the first test reports in #61.
+
+### Fixed
+- Batteries are now read by the device ID the station lists for them
+  (`devId`), falling back to the serial. Batteries whose detail data came back
+  empty (e.g. warranty replacements) showed Unknown for every sensor.
+- Battery-only stations: if a battery's detail data is still unavailable, its
+  SOC, SOH and model are taken from the station list instead of showing
+  Unknown.
+- Battery voltage and current show 2 decimal places, temperatures 1 (pack
+  voltage was shown rounded to whole volts). Applies to all installs.
+
+### Changed
+- Battery-only stations poll battery data every **60 seconds** by default
+  (minimum 60), and their options show only the battery poll interval.
+  Installs with a Hanchu inverter keep the 10-minute default.
+
+### Added
+- Diagnostics include, per battery (anonymised), whether the last read came
+  from the battery detail or the station list, whether its device ID differs
+  from its serial, and the error the cloud returned if any.
+
 ## [2.6.0-beta.1] - 2026-11-13
 
 Beta for battery-only stations. Install via HACS with "Show beta versions" on.

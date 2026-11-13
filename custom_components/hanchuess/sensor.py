@@ -207,42 +207,49 @@ STATISTICS_SENSORS = {
 BATTERY_SENSORS = {
     "battery_temperature_env": {
         "key": "tEnv",
+        "precision": 1,
         "device_class": SensorDeviceClass.TEMPERATURE,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfTemperature.CELSIUS,
     },
     "battery_temperature_pack": {
         "key": "tPack",
+        "precision": 1,
         "device_class": SensorDeviceClass.TEMPERATURE,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfTemperature.CELSIUS,
     },
     "battery_temperature_mos": {
         "key": "tMos",
+        "precision": 1,
         "device_class": SensorDeviceClass.TEMPERATURE,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfTemperature.CELSIUS,
     },
     "battery_soc_pack": {
         "key": "socPack",
+        "precision": 1,
         "device_class": SensorDeviceClass.BATTERY,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": PERCENTAGE,
     },
     "battery_voltage": {
         "key": "vPack",
+        "precision": 2,
         "device_class": SensorDeviceClass.VOLTAGE,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfElectricPotential.VOLT,
     },
     "battery_current": {
         "key": "iPack",
+        "precision": 2,
         "device_class": SensorDeviceClass.CURRENT,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfElectricCurrent.AMPERE,
     },
     "battery_soh_pack": {
         "key": "sohPack",
+        "precision": 0,
         "device_class": SensorDeviceClass.BATTERY,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": PERCENTAGE,
@@ -256,12 +263,14 @@ BATTERY_SENSORS = {
     },
     "battery_full_capacity": {
         "key": "capFull",
+        "precision": 1,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": "Ah",
         "icon": "mdi:battery-arrow-up",
     },
     "battery_remaining_capacity": {
         "key": "capRemain",
+        "precision": 2,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": "Ah",
         "icon": "mdi:battery-arrow-down",
@@ -528,6 +537,7 @@ def _battery_entities(entry, battery_coordinator) -> list:
                     "device_class": SensorDeviceClass.TEMPERATURE,
                     "state_class": SensorStateClass.MEASUREMENT,
                     "unit": UnitOfTemperature.CELSIUS,
+                    "precision": 1,
                 })
                 entities.append(
                     BatterySensor(battery_coordinator, entry, battery_serial, sensor_key, config)
@@ -672,6 +682,8 @@ class BatterySensor(CoordinatorEntity, SensorEntity):
         self._attr_device_class = config.get("device_class")
         self._attr_state_class = config.get("state_class")
         self._attr_native_unit_of_measurement = config.get("unit")
+        if config.get("precision") is not None:
+            self._attr_suggested_display_precision = config["precision"]
 
     @property
     def device_info(self) -> DeviceInfo:

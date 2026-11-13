@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntry
 
 from . import HanchuessConfigEntry
+from .battery import station_summary
 
 TO_REDACT = {"token", "account", "password", "sn", "stationId", "username", "pwd",
              "unique_id", "title", "devId", "battery_serials", "deviceId",
@@ -50,7 +51,17 @@ async def async_get_config_entry_diagnostics(
 
     if getattr(store, "battery_only", False):
         diag["mode"] = "battery_only"
-        diag["station_summary"] = getattr(store, "station_summary", None)
+        latest = getattr(store.battery, "station_detail", None) if store.battery else None
+        diag["station_summary"] = (
+            station_summary(latest) if latest else getattr(store, "station_summary", None)
+        )
+    statuses = getattr(store.battery, "battery_status", None) if store.battery else None
+    if isinstance(statuses, dict):
+        serials = entry.data.get("battery_serials", []) or list(statuses)
+        diag["battery_status"] = {
+            f"battery_{index}": statuses.get(serial)
+            for index, serial in enumerate(serials, start=1)
+        }
 
     diag["device_status"] = async_redact_data(
         getattr(store.realtime, "data", None) or {}, TO_REDACT
