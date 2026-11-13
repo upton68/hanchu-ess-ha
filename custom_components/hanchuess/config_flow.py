@@ -10,6 +10,7 @@ from .const import (
     DOMAIN,
     BASE_URL,
     WEB_CONSOLE_URL,
+    MODE_BATTERY_ONLY,
     CONF_REALTIME_INTERVAL,
     CONF_STATISTICS_INTERVAL,
     CONF_BATTERY_INTERVAL,
@@ -22,7 +23,7 @@ from .const import (
     DEFAULT_SCHEDULE_INTERVAL,
     MIN_SCHEDULE_INTERVAL,
 )
-from .battery import extract_battery_serials
+from .battery import battery_only_serials, extract_battery_serials
 from .api import HanchuessApiClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -37,6 +38,8 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._client = None
         self._account = None
         self._password = None
+        # stationId -> {"name": ..., "battery_serials": [...]}
+        self._battery_stations: dict[str, dict] = {}
 
     @staticmethod
     @callback
@@ -54,8 +57,10 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._account = shared_client._account
             self._password = shared_client._password
             self._devices = await shared_client.async_get_devices()
-            if self._devices:
+            if self._available_inverters():
                 return await self.async_step_select_device()
+            if await self._discover_battery_stations():
+                return await self.async_step_battery_station()
 
         errors = {}
         if user_input is not None:
@@ -69,8 +74,12 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._account = user_input["account"]
                 self._password = user_input["password"]
                 self._devices = await client.async_get_devices()
-                if self._devices:
+                if self._available_inverters():
                     return await self.async_step_select_device()
+                # No Hanchu inverter: look for Hanchu batteries on the
+                # account's stations (e.g. with a third-party inverter).
+                if await self._discover_battery_stations():
+                    return await self.async_step_battery_station()
                 errors["base"] = "no_devices"
             else:
                 errors["base"] = "auth_failed"
@@ -84,6 +93,82 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    def _configured_ids(self) -> set:
+        return {
+            e.unique_id for e in self.hass.config_entries.async_entries(DOMAIN)
+        } | {
+            e.data.get("sn") for e in self.hass.config_entries.async_entries(DOMAIN)
+        }
+
+    def _available_inverters(self) -> dict:
+        configured = self._configured_ids()
+        return {
+            d["sn"]: d["sn"]
+            for d in self._devices
+            if d.get("devType") == "2" and d.get("sn") and d["sn"] not in configured
+        }
+
+    async def _discover_battery_stations(self) -> bool:
+        """Find stations with Hanchu batteries but no Hanchu inverter."""
+        client = self._client
+        if client is None:
+            return False
+        language = self.hass.config.language or "en"
+        configured = self._configured_ids()
+        self._battery_stations = {}
+        for station in await client.async_get_stations(language):
+            station_id = station.get("stationId")
+            if not station_id or f"station_{station_id}" in configured:
+                continue
+            detail = await client.async_get_station_detail(station_id, language)
+            serials = battery_only_serials(detail)
+            if serials:
+                self._battery_stations[station_id] = {
+                    "name": station.get("stationName") or station_id,
+                    "battery_serials": serials,
+                }
+        return bool(self._battery_stations)
+
+    async def async_step_battery_station(self, user_input=None):
+        """Add a station's Hanchu batteries when there's no Hanchu inverter."""
+        stations = self._battery_stations
+        if user_input is not None:
+            station_id = user_input.get("station") or next(iter(stations))
+            station = stations[station_id]
+            await self.async_set_unique_id(f"station_{station_id}")
+            self._abort_if_unique_id_configured()
+            return self.async_create_entry(
+                title=f"Hanchu Batteries {station['name']}",
+                data={
+                    "mode": MODE_BATTERY_ONLY,
+                    "token": self._token,
+                    **self._credentials(),
+                    "stationId": station_id,
+                    "stationName": station["name"],
+                    "battery_serials": station["battery_serials"],
+                },
+            )
+
+        if len(stations) == 1:
+            station = next(iter(stations.values()))
+            return self.async_show_form(
+                step_id="battery_station",
+                data_schema=vol.Schema({}),
+                description_placeholders={
+                    "station": station["name"],
+                    "count": str(len(station["battery_serials"])),
+                },
+            )
+        options = {
+            station_id: f"{s['name']} ({len(s['battery_serials'])} batteries)"
+            for station_id, s in stations.items()
+        }
+        return self.async_show_form(
+            step_id="battery_station",
+            data_schema=vol.Schema({vol.Required("station"): vol.In(options)}),
+            description_placeholders={"station": "", "count": ""},
+        )
+
     def _credentials(self) -> dict:
         """Credentials to store with the entry, so a rejected refresh can re-login."""
         if self._account and self._password:
@@ -94,15 +179,7 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Step 2: Select devices (multi-select)."""
         errors = {}
         # Filter inverters and exclude already configured
-        configured_ids = set()
-        for entry in self.hass.config_entries.async_entries(DOMAIN):
-            configured_ids.add(entry.data.get("sn"))
-
-        available = {
-            d["sn"]: d["sn"]
-            for d in self._devices
-            if d.get("devType") == "2" and d["sn"] not in configured_ids
-        }
+        available = self._available_inverters()
 
         if not available:
             return self.async_abort(reason="no_devices")

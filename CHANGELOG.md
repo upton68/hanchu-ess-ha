@@ -10,6 +10,26 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.6.0-beta.1] - 2026-11-13
+
+Beta for battery-only stations. Install via HACS with "Show beta versions" on.
+
+### Added
+- **Battery-only stations**: Hanchu batteries with a third-party inverter
+  (e.g. LuxPower) can now be added. When no Hanchu inverter is found during
+  setup, stations with Hanchu batteries are offered instead. Placeholder
+  third-party inverters are ignored. Each battery gets its own device under a
+  Hanchu Station device, with the full battery and cell sensor set. No
+  inverter sensors or controls in this mode (#61).
+- Diagnostics for a battery-only station include a redacted outline of the
+  station (inverter brands, battery count, models, shortened serials).
+
+### Changed
+- Diagnostics now also redact the station name.
+- Release workflow: tags with a suffix (e.g. `v2.6.0-beta.1`) are published as
+  GitHub pre-releases and may be cut from a branch; `vX.Y.Z` tags are
+  unchanged.
+
 ## [2.5.0] - 2026-11-13
 
 ### Added

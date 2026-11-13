@@ -287,6 +287,32 @@ After initial setup, polling intervals and fast charge duration can be adjusted 
 
 The older setup, which drives Predbat through this integration with a bridge script via Predbat's generic Service API, is kept for existing users in [docs/predbat-bridge.md](docs/predbat-bridge.md), with its `apps.yaml` template in [docs/hanchu_cloud.yaml](docs/hanchu_cloud.yaml).
 
+## Battery-only Stations (beta)
+
+If your Hanchu batteries are paired with **another brand of inverter** (for
+example LuxPower), the integration can add just the batteries. During setup,
+when no Hanchu inverter is found on the account, it looks for stations with
+Hanchu batteries and offers to add them. Third-party inverters that appear in
+the Hanchu app as placeholders are ignored.
+
+You get:
+- a **Hanchu Station** device, with each battery as its own device under it
+  (parallel batteries are listed individually, not as one averaged pack)
+- per battery: SOC, SOH, voltage, current, temperatures, capacity and the
+  cell sensors (Max/Min Cell Voltage, Cell Voltage Difference, Cell 1-N
+  Voltage)
+
+There are no inverter sensors, controls, Inverter Status or Remote Settings
+card in this mode, since the inverter isn't Hanchu's. Battery data is polled at
+the **Battery poll interval** (default 10 minutes).
+
+This mode relies on the Hanchu web console's station and battery endpoints. If
+Hanchu changes those, battery-only stations can stop updating until the
+integration is updated. **Download diagnostics** on the integration includes
+a redacted outline of what the cloud reports for your station (no names,
+emails, locations or full serials), which is the most useful thing to attach to
+an issue.
+
 ## Inverter Status Sensor
 
 `sensor.hanchuess_<serial>_inverter_status` shows what the battery is doing

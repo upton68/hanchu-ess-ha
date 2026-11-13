@@ -3,6 +3,9 @@ import os
 
 DOMAIN = "hanchuess"
 PLATFORMS = ["sensor", "number", "switch", "select", "time", "button"]
+# Hanchu batteries with a third-party inverter: battery sensors only.
+BATTERY_ONLY_PLATFORMS = ["sensor"]
+MODE_BATTERY_ONLY = "battery_only"
 BASE_URL = os.environ.get("HANCHUESS_URL", "https://iess3.hanchuess.com")
 WEB_CONSOLE_URL = "https://iess3.hanchuess.com/login"
 

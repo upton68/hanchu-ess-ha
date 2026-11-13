@@ -514,28 +514,9 @@ def _battery_temperature_count(battery_data: dict) -> int:
         return 4
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: HanchuessConfigEntry, async_add_entities: AddEntitiesCallback
-):
-    data = entry.runtime_data
-    realtime = data.realtime
-    statistics = data.statistics
-    battery_coordinator = data.battery
+def _battery_entities(entry, battery_coordinator) -> list:
+    """Sensors for every battery serial on the entry."""
     entities = []
-    entities.append(DeviceStatusSensor(realtime, entry))
-    entities.append(InverterStatusSensor(realtime, entry))
-    for sensor_key, config in SENSORS.items():
-        cond_key = config.get("condition_key")
-        if cond_key:
-            if realtime.data.get(cond_key) != config.get("condition_value"):
-                continue
-        entities.append(HanchueSensor(realtime, entry, sensor_key, config))
-    for sensor_key, config in STATISTICS_SENSORS.items():
-        cond_key = config.get("condition_key")
-        if cond_key:
-            if statistics.data.get(cond_key) != config.get("condition_value"):
-                continue
-        entities.append(HanchueSensor(statistics, entry, sensor_key, config))
     if battery_coordinator and entry.data.get("battery_serials"):
         for battery_serial in entry.data.get("battery_serials", []):
             battery_data = battery_coordinator.data.get(battery_serial, {})
@@ -576,6 +557,36 @@ async def async_setup_entry(
                 entities.append(
                     BatterySensor(battery_coordinator, entry, battery_serial, sensor_key, config)
                 )
+    return entities
+
+
+async def async_setup_entry(
+    hass: HomeAssistant, entry: HanchuessConfigEntry, async_add_entities: AddEntitiesCallback
+):
+    data = entry.runtime_data
+    realtime = data.realtime
+    statistics = data.statistics
+    battery_coordinator = data.battery
+    entities = []
+    if realtime is None:
+        # Battery-only station: no inverter sensors, settings or model sensors.
+        async_add_entities(_battery_entities(entry, battery_coordinator))
+        return
+    entities.append(DeviceStatusSensor(realtime, entry))
+    entities.append(InverterStatusSensor(realtime, entry))
+    for sensor_key, config in SENSORS.items():
+        cond_key = config.get("condition_key")
+        if cond_key:
+            if realtime.data.get(cond_key) != config.get("condition_value"):
+                continue
+        entities.append(HanchueSensor(realtime, entry, sensor_key, config))
+    for sensor_key, config in STATISTICS_SENSORS.items():
+        cond_key = config.get("condition_key")
+        if cond_key:
+            if statistics.data.get(cond_key) != config.get("condition_value"):
+                continue
+        entities.append(HanchueSensor(statistics, entry, sensor_key, config))
+    entities.extend(_battery_entities(entry, battery_coordinator))
     async_add_entities(entities)
     # Add the pending settings count sensor (no coordinator — driven by staging buffer)
     async_add_entities([HanchuessSettingsPendingSensor(entry)])
@@ -664,7 +675,6 @@ class BatterySensor(CoordinatorEntity, SensorEntity):
 
     @property
     def device_info(self) -> DeviceInfo:
-        inverter_serial_number = self._entry.data["sn"]
         return _battery_device_info(self._entry, self.coordinator, self._battery_serial)
 
     @property
