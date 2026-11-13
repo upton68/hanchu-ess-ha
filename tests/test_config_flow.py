@@ -38,12 +38,13 @@ def _bypass_card_dependencies(hass):
         hass.config.components.add(dep)
 
 
-def _patched_client(token="tok", devices=None):
+def _patched_client(token="tok", devices=None, stations=None):
     """Patch HanchuessApiClient in config_flow with a mock instance."""
     patcher = patch(CLIENT_PATH)
     mock_cls = patcher.start()
     instance = mock_cls.return_value
     instance.token = token
+    instance.async_get_stations = AsyncMock(return_value=stations or [])
     instance.async_login = AsyncMock(return_value=token)
     instance.async_get_devices = AsyncMock(
         return_value=devices if devices is not None else []
@@ -579,3 +580,131 @@ async def test_setup_entry_passes_stored_credentials_to_client(hass: HomeAssista
         assert await hanchuess.async_setup_entry(hass, entry) is True
 
     client.set_credentials.assert_called_once_with("a", "p")
+
+
+from tests.test_battery_only import (  # noqa: E402
+    HANCHU_PCS,
+    LUX_PLACEHOLDER,
+    SIX_BATTERIES,
+    _station,
+)
+
+# --- Battery-only stations (#61) -----------------------------------------------------------------
+
+STATIONS = [{"stationId": "ST1", "stationName": "Home"}]
+
+
+async def _login(hass):
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    return await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"account": "a", "password": "p"}
+    )
+
+
+async def test_flow_offers_battery_only_station(hass: HomeAssistant):
+    patcher, client = _patched_client(devices=[], stations=STATIONS)
+    client.async_get_station_detail = AsyncMock(
+        return_value=_station([LUX_PLACEHOLDER, LUX_PLACEHOLDER], SIX_BATTERIES)
+    )
+    try:
+        result = await _login(hass)
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "battery_station"
+        assert result["description_placeholders"] == {"station": "Home", "count": "6"}
+
+        with patch("custom_components.hanchuess.async_setup_entry", return_value=True):
+            created = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+            await hass.async_block_till_done()
+    finally:
+        patcher.stop()
+
+    assert created["type"] == FlowResultType.CREATE_ENTRY
+    assert created["title"] == "Hanchu Batteries Home"
+    data = created["data"]
+    assert data["mode"] == "battery_only"
+    assert data["stationId"] == "ST1"
+    assert data["battery_serials"] == [b["sn"] for b in SIX_BATTERIES]
+    assert data["account"] == "a" and data["password"] == "p"
+    assert "sn" not in data
+    assert created["result"].unique_id == "station_ST1"
+
+
+async def test_flow_lets_user_pick_between_battery_stations(hass: HomeAssistant):
+    stations = STATIONS + [{"stationId": "ST2", "stationName": "Barn"}]
+    patcher, client = _patched_client(devices=[], stations=stations)
+    client.async_get_station_detail = AsyncMock(
+        side_effect=lambda sid, lang="en": _station([], SIX_BATTERIES[:3] if sid == "ST1" else SIX_BATTERIES[3:5])
+    )
+    try:
+        result = await _login(hass)
+        assert result["step_id"] == "battery_station"
+        with patch("custom_components.hanchuess.async_setup_entry", return_value=True):
+            created = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"station": "ST2"}
+            )
+            await hass.async_block_till_done()
+    finally:
+        patcher.stop()
+    assert created["data"]["stationId"] == "ST2"
+    assert len(created["data"]["battery_serials"]) == 2
+
+
+async def test_flow_skips_station_with_hanchu_inverter(hass: HomeAssistant):
+    patcher, client = _patched_client(devices=[], stations=STATIONS)
+    client.async_get_station_detail = AsyncMock(
+        return_value=_station([HANCHU_PCS], SIX_BATTERIES[:2])
+    )
+    try:
+        result = await _login(hass)
+    finally:
+        patcher.stop()
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {"base": "no_devices"}
+
+
+async def test_flow_skips_already_configured_station(hass: HomeAssistant):
+    MockConfigEntry(domain=DOMAIN, unique_id="station_ST1", data={"mode": "battery_only"}).add_to_hass(hass)
+    patcher, client = _patched_client(devices=[], stations=STATIONS)
+    client.async_get_station_detail = AsyncMock(return_value=_station([], SIX_BATTERIES))
+    try:
+        result = await _login(hass)
+    finally:
+        patcher.stop()
+    assert result["errors"] == {"base": "no_devices"}
+    client.async_get_station_detail.assert_not_called()
+
+
+async def test_flow_prefers_hanchu_inverter_when_present(hass: HomeAssistant):
+    patcher, client = _patched_client(devices=[{"sn": "SN1", "devType": "2"}], stations=STATIONS)
+    try:
+        result = await _login(hass)
+    finally:
+        patcher.stop()
+    assert result["step_id"] == "select_device"
+    client.async_get_stations.assert_not_called()
+
+
+
+
+async def test_options_flow_battery_only_shows_battery_interval_only(hass: HomeAssistant):
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id="station_ST1",
+        data={"mode": "battery_only", "stationId": "ST1", "battery_serials": ["B1"]},
+    )
+    entry.add_to_hass(hass)
+    with patch.object(hass.config_entries, "async_schedule_reload", MagicMock()):
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        keys = [str(k) for k in result["data_schema"].schema]
+        assert keys == ["battery_interval"]
+        with pytest.raises(InvalidData):
+            await hass.config_entries.options.async_configure(
+                result["flow_id"], {"battery_interval": 30}
+            )
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        done = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"battery_interval": 60}
+        )
+    assert done["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options == {"battery_interval": 60}

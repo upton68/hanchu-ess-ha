@@ -16,6 +16,11 @@
           "devices": "设备"
         }
       },
+      "battery_station": {
+        "title": "添加 Hanchu 电池",
+        "description": "未找到 Hanchu 逆变器，但此账户中有 Hanchu 电池（例如搭配第三方逆变器）。在电站 {station} 中找到 {count} 块电池。每块电池将添加电量、电压、电流、温度、容量和单体电压。此模式下没有逆变器传感器或控制。",
+        "data": { "station": "电站" }
+      },
       "reauth_confirm": {
         "title": "重新认证 Hanchuess",
         "description": "Token 已过期，请重新输入账号密码。",
@@ -28,7 +33,7 @@
     "error": {
       "auth_failed": "授权失败，请检查账号信息",
       "cannot_connect": "无法连接到服务器",
-      "no_devices": "该账号下未找到设备",
+      "no_devices": "该账号下未找到 Hanchu 逆变器或电池",
       "station_lookup_failed": "无法加载站点详情",
       "battery_lookup_failed": "无法加载电池详情。如果您从未登录过 Hanchu 网页控制台，请先在 {console_url} 登录一次并退出，然后重试。"
     },

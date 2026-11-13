@@ -11,9 +11,15 @@ from homeassistant.components import websocket_api
 from homeassistant.exceptions import ConfigEntryNotReady
 import homeassistant.helpers.device_registry as dr
 import homeassistant.helpers.config_validation as cv
-from .const import DOMAIN, PLATFORMS, BASE_URL
+from .const import (
+    DOMAIN,
+    PLATFORMS,
+    BASE_URL,
+    BATTERY_ONLY_PLATFORMS,
+    MODE_BATTERY_ONLY,
+)
 from .api import HanchuessApiClient
-from .battery import merge_battery_serials
+from .battery import battery_dev_ids, merge_battery_serials, station_summary
 from .models import (
     DEFAULT_MODEL_NAME,
     InverterModel,
@@ -63,18 +69,28 @@ CARD_URL = f"{CARD_URL_BASE}/{CARD_FILE}?v={_manifest_version()}"
 class HanchuessData:
     """Data stored on a config entry's runtime_data for the lifetime of its setup."""
 
-    realtime: HanchuessRealtimeCoordinator
-    statistics: HanchuessStatisticsCoordinator
+    # None for a battery-only station (Hanchu batteries, third-party inverter).
+    realtime: HanchuessRealtimeCoordinator | None
+    statistics: HanchuessStatisticsCoordinator | None
     battery: HanchuessBatteryCoordinator | None
     number_limits: dict
     startup_values: dict
     staging: SettingsStagingBuffer
     control_registry: dict  # control_key -> entity, populated by async_added_to_hass
+    # Parent device for the batteries: the inverter, or for a battery-only
+    # station the station device.
     inverter_device_id: str
     # Resolved from getDeviceStatus devModel; None if missing or unknown.
     inverter_model: InverterModel | None = None
     # Inverter's own slots/work mode/SOC limits, for the Inverter Status sensor.
     schedule: HanchuessScheduleCoordinator | None = None
+    battery_only: bool = False
+    # Redacted outline of the station (battery-only), for diagnostics.
+    station_summary: dict | None = None
+
+
+def is_battery_only(entry) -> bool:
+    return entry.data.get("mode") == MODE_BATTERY_ONLY
 
 
 def _note_written(entry, values: dict) -> None:
@@ -99,6 +115,8 @@ def _iter_entry_runtime_data(hass: HomeAssistant):
 def _find_realtime_coordinator(hass: HomeAssistant, sn: str | None = None):
     """Return the realtime coordinator for `sn`, or the first configured one if sn is None."""
     for entry, data in _iter_entry_runtime_data(hass):
+        if data.realtime is None:
+            continue
         if sn is None or entry.data.get("sn") == sn:
             return data.realtime
     return None
@@ -107,6 +125,8 @@ def _find_realtime_coordinator(hass: HomeAssistant, sn: str | None = None):
 def _find_entry(hass: HomeAssistant, sn: str | None = None):
     """Return the config entry for `sn`, or the first one if sn is None."""
     for entry, _data in _iter_entry_runtime_data(hass):
+        if is_battery_only(entry):
+            continue
         if sn is None or entry.data.get("sn") == sn:
             return entry
     return None
@@ -271,8 +291,10 @@ async def _refresh_battery_serials(
     entry: ConfigEntry,
     client: HanchuessApiClient,
     station_id: str | None,
-) -> list[str]:
+) -> tuple[list[str], dict | None]:
     """Refresh stored battery serials from the latest station detail.
+
+    Returns the serials and the station detail (or None if not fetched).
     refresh_battery_serials(...) starts from stored battery_serials. If there is no station_id, it returns
     existing serials unchanged. Otherwise, it fetches station detail, merges discovered battery serials
     with existing ones via merge_battery_serials, and if the merged list is changed, it updates all Hanchu
@@ -280,7 +302,7 @@ async def _refresh_battery_serials(
     the merged serial list."""
     existing_serials = entry.data.get("battery_serials", [])
     if not station_id:
-        return existing_serials
+        return existing_serials, None
 
     language = hass.config.language or "en"
     station_detail = await client.async_get_station_detail(station_id, language)
@@ -292,7 +314,7 @@ async def _refresh_battery_serials(
                     other_entry,
                     data={**other_entry.data, "battery_serials": merged_serials},
                 )
-    return merged_serials
+    return merged_serials, station_detail
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -599,6 +621,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
     if entry.data.get("account") and entry.data.get("password"):
         client.set_credentials(entry.data["account"], entry.data["password"])
 
+    if is_battery_only(entry):
+        return await _async_setup_battery_only(hass, entry, client)
+
     coordinator = HanchuessRealtimeCoordinator(hass, entry, client)
     await _async_initial_refresh(coordinator, entry)
 
@@ -606,11 +631,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
     await _async_initial_refresh(stats_coordinator, entry)
 
     station_id = await _resolve_station_id(hass, entry, client, coordinator.data)
-    battery_serials = await _refresh_battery_serials(hass, entry, client, station_id)
+    battery_serials, station_detail = await _refresh_battery_serials(
+        hass, entry, client, station_id
+    )
 
     battery_coordinator = None
     if battery_serials:
         battery_coordinator = HanchuessBatteryCoordinator(hass, entry, client)
+        # Read batteries by the device ID the station lists for them: some
+        # (e.g. older batteries) are registered under a devId that differs
+        # from their serial, and come back empty when queried by serial.
+        battery_coordinator.dev_ids.update(battery_dev_ids(station_detail))
         await _async_initial_refresh(battery_coordinator, entry)
 
     # Fetch menu to get device-specific min/max values for number entities
@@ -764,8 +795,64 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
     return True
 
 
+async def _async_setup_battery_only(
+    hass: HomeAssistant, entry: HanchuessConfigEntry, client: HanchuessApiClient
+) -> bool:
+    """Set up a station with Hanchu batteries but no Hanchu inverter.
+
+    Batteries come from the station's bmsList; there is no realtime,
+    statistics, schedule or control side, since the inverter belongs to
+    another brand.
+    """
+    station_id = entry.data["stationId"]
+    language = hass.config.language or "en"
+    station_detail = await client.async_get_station_detail(station_id, language)
+    summary = station_summary(station_detail) if station_detail else None
+    if summary is not None:
+        _LOGGER.info("[HANCHUESS] Battery-only station: %s", summary)
+
+    existing = entry.data.get("battery_serials", [])
+    battery_serials = merge_battery_serials(existing, station_detail or {})
+    if battery_serials != existing:
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, "battery_serials": battery_serials}
+        )
+    if not battery_serials:
+        raise ConfigEntryNotReady("No batteries found for this station")
+
+    battery_coordinator = HanchuessBatteryCoordinator(hass, entry, client)
+    battery_coordinator.dev_ids.update(battery_dev_ids(station_detail))
+    await _async_initial_refresh(battery_coordinator, entry)
+
+    station_name = entry.data.get("stationName") or "Hanchu"
+    device_registry = dr.async_get(hass)
+    station_device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"station_{station_id}")},
+        name=f"Hanchu Station {station_name}",
+        manufacturer="Hanchu",
+        model="Battery-only station",
+    )
+
+    entry.runtime_data = HanchuessData(
+        realtime=None,
+        statistics=None,
+        battery=battery_coordinator,
+        number_limits={},
+        startup_values={},
+        staging=SettingsStagingBuffer(),
+        control_registry={},
+        inverter_device_id=station_device.id,
+        battery_only=True,
+        station_summary=summary,
+    )
+    await hass.config_entries.async_forward_entry_setups(entry, BATTERY_ONLY_PLATFORMS)
+    return True
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) -> bool:
-    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    platforms = BATTERY_ONLY_PLATFORMS if is_battery_only(entry) else PLATFORMS
+    unloaded = await hass.config_entries.async_unload_platforms(entry, platforms)
     if unloaded:
         still_loaded = [
             other

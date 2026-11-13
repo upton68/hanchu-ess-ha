@@ -16,6 +16,11 @@
           "devices": "Devices"
         }
       },
+      "battery_station": {
+        "title": "Add Hanchu batteries",
+        "description": "No Hanchu inverter was found, but this account has Hanchu batteries, for example with a third-party inverter. {count} batteries were found in station {station}. Each battery will be added with its SOC, voltage, current, temperatures, capacity and cell voltages. There are no inverter sensors or controls in this mode.",
+        "data": { "station": "Station" }
+      },
       "reauth_confirm": {
         "title": "Re-authenticate Hanchuess",
         "description": "Your token has expired. Please re-enter your credentials.",
@@ -28,7 +33,7 @@
     "error": {
       "auth_failed": "Authentication failed, please check your credentials",
       "cannot_connect": "Cannot connect to server",
-      "no_devices": "No devices found under this account",
+      "no_devices": "No Hanchu inverters or batteries found under this account",
       "station_lookup_failed": "Could not load station details",
       "battery_lookup_failed": "Could not load battery details. If you have never logged into the Hanchu web console, log in once at {console_url}, log out, then try again."
     },

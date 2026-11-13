@@ -207,42 +207,49 @@ STATISTICS_SENSORS = {
 BATTERY_SENSORS = {
     "battery_temperature_env": {
         "key": "tEnv",
+        "precision": 1,
         "device_class": SensorDeviceClass.TEMPERATURE,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfTemperature.CELSIUS,
     },
     "battery_temperature_pack": {
         "key": "tPack",
+        "precision": 1,
         "device_class": SensorDeviceClass.TEMPERATURE,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfTemperature.CELSIUS,
     },
     "battery_temperature_mos": {
         "key": "tMos",
+        "precision": 1,
         "device_class": SensorDeviceClass.TEMPERATURE,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfTemperature.CELSIUS,
     },
     "battery_soc_pack": {
         "key": "socPack",
+        "precision": 1,
         "device_class": SensorDeviceClass.BATTERY,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": PERCENTAGE,
     },
     "battery_voltage": {
         "key": "vPack",
+        "precision": 2,
         "device_class": SensorDeviceClass.VOLTAGE,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfElectricPotential.VOLT,
     },
     "battery_current": {
         "key": "iPack",
+        "precision": 2,
         "device_class": SensorDeviceClass.CURRENT,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfElectricCurrent.AMPERE,
     },
     "battery_soh_pack": {
         "key": "sohPack",
+        "precision": 0,
         "device_class": SensorDeviceClass.BATTERY,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": PERCENTAGE,
@@ -256,12 +263,14 @@ BATTERY_SENSORS = {
     },
     "battery_full_capacity": {
         "key": "capFull",
+        "precision": 1,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": "Ah",
         "icon": "mdi:battery-arrow-up",
     },
     "battery_remaining_capacity": {
         "key": "capRemain",
+        "precision": 2,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": "Ah",
         "icon": "mdi:battery-arrow-down",
@@ -514,28 +523,9 @@ def _battery_temperature_count(battery_data: dict) -> int:
         return 4
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: HanchuessConfigEntry, async_add_entities: AddEntitiesCallback
-):
-    data = entry.runtime_data
-    realtime = data.realtime
-    statistics = data.statistics
-    battery_coordinator = data.battery
+def _battery_entities(entry, battery_coordinator) -> list:
+    """Sensors for every battery serial on the entry."""
     entities = []
-    entities.append(DeviceStatusSensor(realtime, entry))
-    entities.append(InverterStatusSensor(realtime, entry))
-    for sensor_key, config in SENSORS.items():
-        cond_key = config.get("condition_key")
-        if cond_key:
-            if realtime.data.get(cond_key) != config.get("condition_value"):
-                continue
-        entities.append(HanchueSensor(realtime, entry, sensor_key, config))
-    for sensor_key, config in STATISTICS_SENSORS.items():
-        cond_key = config.get("condition_key")
-        if cond_key:
-            if statistics.data.get(cond_key) != config.get("condition_value"):
-                continue
-        entities.append(HanchueSensor(statistics, entry, sensor_key, config))
     if battery_coordinator and entry.data.get("battery_serials"):
         for battery_serial in entry.data.get("battery_serials", []):
             battery_data = battery_coordinator.data.get(battery_serial, {})
@@ -547,6 +537,7 @@ async def async_setup_entry(
                     "device_class": SensorDeviceClass.TEMPERATURE,
                     "state_class": SensorStateClass.MEASUREMENT,
                     "unit": UnitOfTemperature.CELSIUS,
+                    "precision": 1,
                 })
                 entities.append(
                     BatterySensor(battery_coordinator, entry, battery_serial, sensor_key, config)
@@ -576,6 +567,36 @@ async def async_setup_entry(
                 entities.append(
                     BatterySensor(battery_coordinator, entry, battery_serial, sensor_key, config)
                 )
+    return entities
+
+
+async def async_setup_entry(
+    hass: HomeAssistant, entry: HanchuessConfigEntry, async_add_entities: AddEntitiesCallback
+):
+    data = entry.runtime_data
+    realtime = data.realtime
+    statistics = data.statistics
+    battery_coordinator = data.battery
+    entities = []
+    if realtime is None:
+        # Battery-only station: no inverter sensors, settings or model sensors.
+        async_add_entities(_battery_entities(entry, battery_coordinator))
+        return
+    entities.append(DeviceStatusSensor(realtime, entry))
+    entities.append(InverterStatusSensor(realtime, entry))
+    for sensor_key, config in SENSORS.items():
+        cond_key = config.get("condition_key")
+        if cond_key:
+            if realtime.data.get(cond_key) != config.get("condition_value"):
+                continue
+        entities.append(HanchueSensor(realtime, entry, sensor_key, config))
+    for sensor_key, config in STATISTICS_SENSORS.items():
+        cond_key = config.get("condition_key")
+        if cond_key:
+            if statistics.data.get(cond_key) != config.get("condition_value"):
+                continue
+        entities.append(HanchueSensor(statistics, entry, sensor_key, config))
+    entities.extend(_battery_entities(entry, battery_coordinator))
     async_add_entities(entities)
     # Add the pending settings count sensor (no coordinator — driven by staging buffer)
     async_add_entities([HanchuessSettingsPendingSensor(entry)])
@@ -661,10 +682,11 @@ class BatterySensor(CoordinatorEntity, SensorEntity):
         self._attr_device_class = config.get("device_class")
         self._attr_state_class = config.get("state_class")
         self._attr_native_unit_of_measurement = config.get("unit")
+        if config.get("precision") is not None:
+            self._attr_suggested_display_precision = config["precision"]
 
     @property
     def device_info(self) -> DeviceInfo:
-        inverter_serial_number = self._entry.data["sn"]
         return _battery_device_info(self._entry, self.coordinator, self._battery_serial)
 
     @property
