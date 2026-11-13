@@ -10,6 +10,8 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-11-13
+
 ### Added
 - **Battery cell sensors** for each battery that reports cell data: Max Cell
   Voltage, Min Cell Voltage and Cell Voltage Difference (shown in mV), plus
@@ -473,7 +475,8 @@ act on it straight away must now call `hanchuess.write_settings` after the write
 - Initial fork of the original integration with read-only battery, grid, PV, and
   load sensors and the custom Lovelace card.
 
-[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.4.0...HEAD
+[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.5.0...HEAD
+[2.5.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/upton68/hanchu-ess-ha/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.2.2...v2.3.0
