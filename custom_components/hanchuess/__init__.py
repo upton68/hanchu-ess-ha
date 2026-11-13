@@ -291,8 +291,10 @@ async def _refresh_battery_serials(
     entry: ConfigEntry,
     client: HanchuessApiClient,
     station_id: str | None,
-) -> list[str]:
+) -> tuple[list[str], dict | None]:
     """Refresh stored battery serials from the latest station detail.
+
+    Returns the serials and the station detail (or None if not fetched).
     refresh_battery_serials(...) starts from stored battery_serials. If there is no station_id, it returns
     existing serials unchanged. Otherwise, it fetches station detail, merges discovered battery serials
     with existing ones via merge_battery_serials, and if the merged list is changed, it updates all Hanchu
@@ -300,7 +302,7 @@ async def _refresh_battery_serials(
     the merged serial list."""
     existing_serials = entry.data.get("battery_serials", [])
     if not station_id:
-        return existing_serials
+        return existing_serials, None
 
     language = hass.config.language or "en"
     station_detail = await client.async_get_station_detail(station_id, language)
@@ -312,7 +314,7 @@ async def _refresh_battery_serials(
                     other_entry,
                     data={**other_entry.data, "battery_serials": merged_serials},
                 )
-    return merged_serials
+    return merged_serials, station_detail
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -629,11 +631,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
     await _async_initial_refresh(stats_coordinator, entry)
 
     station_id = await _resolve_station_id(hass, entry, client, coordinator.data)
-    battery_serials = await _refresh_battery_serials(hass, entry, client, station_id)
+    battery_serials, station_detail = await _refresh_battery_serials(
+        hass, entry, client, station_id
+    )
 
     battery_coordinator = None
     if battery_serials:
         battery_coordinator = HanchuessBatteryCoordinator(hass, entry, client)
+        # Read batteries by the device ID the station lists for them: some
+        # (e.g. older batteries) are registered under a devId that differs
+        # from their serial, and come back empty when queried by serial.
+        battery_coordinator.dev_ids.update(battery_dev_ids(station_detail))
         await _async_initial_refresh(battery_coordinator, entry)
 
     # Fetch menu to get device-specific min/max values for number entities

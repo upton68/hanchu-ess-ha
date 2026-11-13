@@ -340,3 +340,37 @@ async def test_diagnostics_include_battery_status(hass: HomeAssistant):
         "battery_1": {"ok": True}, "battery_2": {"ok": False, "error": "empty data"}}
     assert len(diag["station_summary"]["batteries"]) == 2
     assert "B1" not in repr(diag["battery_status"])
+
+
+async def test_normal_setup_seeds_battery_dev_ids(hass: HomeAssistant):
+    """Installs with a Hanchu inverter also read batteries by devId."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id="SN1",
+        data={"sn": "SN1", "token": "tok", "stationId": "ST1", "battery_serials": ["B1", "B2"]},
+    )
+    entry.add_to_hass(hass)
+    station = _station([HANCHU_PCS], [{**_bms("B1"), "devId": "B1"}, {**_bms("B2"), "devId": "D2"}])
+    client = MagicMock()
+    client.token = "tok"
+    client.should_refresh_token.return_value = False
+    client.async_get_device_status = AsyncMock(return_value={"devStatus": 1, "stationId": "ST1"})
+    client.async_get_device_statistics = AsyncMock(return_value={"load": 1})
+    client.async_get_menu = AsyncMock(return_value={"code": 200, "data": {}})
+    client.async_iot_get = AsyncMock(return_value={})
+    client.async_get_station_detail = AsyncMock(return_value=station)
+    client.async_get_battery_data = AsyncMock(
+        side_effect=lambda dev_id, lang="en": DETAIL_OK if dev_id in ("B1", "D2") else EMPTY
+    )
+    hass.data.setdefault(DOMAIN, {})["_client"] = client
+    hass.data[DOMAIN]["_card_registered"] = True
+
+    with patch.object(hass.config_entries, "async_forward_entry_setups", AsyncMock()):
+        assert await hanchuess.async_setup_entry(hass, entry) is True
+
+    battery = entry.runtime_data.battery
+    assert battery.dev_ids == {"B1": "B1", "B2": "D2"}
+    assert battery.data["B2"]["vPack"] == "53.24"
+    queried = [c.args[0] for c in client.async_get_battery_data.await_args_list]
+    assert "D2" in queried and "B2" not in queried
+    # Normal installs don't re-read the station list on each battery poll.
+    assert client.async_get_station_detail.await_count == 1

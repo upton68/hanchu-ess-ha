@@ -10,6 +10,12 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Fixed
+- Installs with a Hanchu inverter now also read each battery by the device ID
+  the station lists for it (as battery-only stations do since beta.2). Older
+  batteries registered under a device ID that differs from their serial
+  previously showed Unknown for every sensor.
+
 ## [2.6.0-beta.2] - 2026-11-13
 
 Second beta for battery-only stations, from the first test reports in #61.
