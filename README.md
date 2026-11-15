@@ -13,7 +13,7 @@ published by Hanchu (Guoxia Technology, the manufacturer) which has had few upda
 - Battery Charge Power (W) — charge only derived power
 - Battery Discharge Power (W) — discharge only derived power
 - Battery Capacity (kWh)
-- Battery pack sensors (per discovered battery serial): Battery Model (diagnostic, see [Battery model detection](#battery-model-detection)), Pack SOC (%), Pack SOH (%), Pack Voltage (V), Pack Current (A), Design Capacity (kWh), Full Capacity (Ah), Remaining Capacity (Ah), Temperature 1-N (degC, based on `numBatT`), Environment Temperature, Pack Temperature, MOS Temperature
+- Battery pack sensors (per discovered battery serial): Battery Model (diagnostic, see [Battery model detection](#battery-model-detection)), Pack SOC (%), Pack SOH (%), Pack Voltage (V), Pack Current (A), Battery Power (W, positive = charging, negative = discharging), Design Capacity (kWh), Full Charge Capacity (Ah), Remaining Capacity (Ah), Remaining Energy (kWh, SOC × Design Capacity), Last Data Update (diagnostic, **disabled by default**: when the battery's logger last uploaded to the cloud, handy for spotting stale data), Temperature 1-N (degC, based on `numBatT`), Environment Temperature, Pack Temperature, MOS Temperature
 - Battery cell sensors (per battery, when the battery reports cell data): Max Cell Voltage (V), Min Cell Voltage (V) and Cell Voltage Difference (shown in mV), plus Cell 1-N Voltage (V, based on `numBat`, **disabled by default**). A growing cell voltage difference, or one cell sitting consistently below the others, is the usual sign of an imbalanced or weak battery. Enable the individual cell sensors on a battery's device page when you want to look closer
 - Grid Power (W) — signed (positive = import, negative = export)
 - Grid Import Power (W) — import only derived power
@@ -314,6 +314,30 @@ integration is updated. **Download diagnostics** on the integration includes
 a redacted outline of what the cloud reports for your station (no names,
 emails, locations or full serials), which is the most useful thing to attach to
 an issue.
+
+### Battery charge and discharge energy
+
+The Hanchu cloud doesn't report live charge/discharge energy per battery, so
+the integration doesn't provide these as sensors. You can build them from each
+battery's **Battery Power** sensor with Home Assistant's own helpers, which
+also work in the Energy dashboard. All three helper types are under
+**Settings → Devices & services → Helpers → Create helper**.
+
+1. **Split charging from discharging.** Create two **Template → Template
+   sensor** helpers, unit `W`, device class *Power*, state class *Measurement*
+   (replace the entity ID with your battery's Battery Power sensor):
+   - Charge power: `{{ [states('sensor.hanchuess_battery_xxx_battery_power') | float(0), 0] | max }}`
+   - Discharge power: `{{ [0 - states('sensor.hanchuess_battery_xxx_battery_power') | float(0), 0] | max }}`
+2. **Turn power into energy.** Create an **Integral sensor** for each, with
+   *Left* Riemann method, metric prefix *k* and time unit *Hours*. This gives
+   Charge Energy and Discharge Energy in kWh, always increasing.
+3. **Daily totals (optional).** Create a **Utility Meter** for each Integral
+   sensor with a *Daily* reset cycle.
+
+Accuracy depends on how often the battery is polled: the 60-second default
+for battery-only stations tracks well, while the 10-minute default for
+installs with a Hanchu inverter is coarse (lower it under **Configure** if you
+need these figures).
 
 ## Inverter Status Sensor
 

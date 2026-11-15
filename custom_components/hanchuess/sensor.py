@@ -459,6 +459,38 @@ def _derive_directional_power(value, mode):
     return 0.0 if result == 0 else result
 
 
+def battery_power_w(battery_data: dict):
+    """Battery power in watts: pack voltage x current.
+
+    Positive = charging, negative = discharging (the sign of iPack), matching
+    the inverter's Battery Power sensor.
+    """
+    voltage = _float_or_none(battery_data.get("vPack"))
+    current = _float_or_none(battery_data.get("iPack"))
+    if voltage is None or current is None:
+        return None
+    return round(voltage * current, 1)
+
+
+def remaining_energy_kwh(battery_data: dict):
+    """Energy left in the battery: SOC x Design Capacity (kWh)."""
+    soc = _float_or_none(battery_data.get("socPack"))
+    design = _float_or_none(battery_data.get("designCapacity"))
+    if soc is None or design is None:
+        return None
+    return round(soc / 100 * design, 3)
+
+
+def last_data_update(battery_data: dict):
+    """When the battery's logger last uploaded data, as a UTC datetime."""
+    stamp = _float_or_none(
+        battery_data.get("dataTimeTs") or battery_data.get("latestDataTimeTs")
+    )
+    if stamp is None or stamp <= 0:
+        return None
+    return dt_util.utc_from_timestamp(stamp / 1000)
+
+
 def _float_or_none(value):
     try:
         return float(value)
@@ -545,6 +577,12 @@ def _battery_entities(entry, battery_coordinator) -> list:
             entities.append(
                 BatteryModelSensor(battery_coordinator, entry, battery_serial)
             )
+            for sensor_key, config in DERIVED_BATTERY_SENSORS.items():
+                entities.append(
+                    BatteryDerivedSensor(
+                        battery_coordinator, entry, battery_serial, sensor_key, config
+                    )
+                )
             if _has_cell_data(battery_data):
                 for sensor_key, config in CELL_STAT_SENSORS.items():
                     entities.append(
@@ -699,6 +737,49 @@ class BatterySensor(CoordinatorEntity, SensorEntity):
             return round(float(value), 3)
         except (ValueError, TypeError):
             return value
+
+
+DERIVED_BATTERY_SENSORS = {
+    "battery_power": {
+        "derive": battery_power_w,
+        "device_class": SensorDeviceClass.POWER,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "unit": UnitOfPower.WATT,
+        "precision": 0,
+        "icon": "mdi:battery-charging",
+    },
+    "battery_remaining_energy": {
+        "derive": remaining_energy_kwh,
+        "device_class": SensorDeviceClass.ENERGY_STORAGE,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "unit": UnitOfEnergy.KILO_WATT_HOUR,
+        "precision": 2,
+        "icon": "mdi:battery-50",
+    },
+    "battery_last_data_update": {
+        "derive": last_data_update,
+        "device_class": SensorDeviceClass.TIMESTAMP,
+        "icon": "mdi:clock-check-outline",
+        "diagnostic": True,
+        "enabled_default": False,
+    },
+}
+
+
+class BatteryDerivedSensor(BatterySensor):
+    """A battery value worked out from the battery's own data."""
+
+    def __init__(self, coordinator, entry, battery_serial, sensor_key, config):
+        super().__init__(coordinator, entry, battery_serial, sensor_key, config)
+        if config.get("diagnostic"):
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        if config.get("enabled_default") is False:
+            self._attr_entity_registry_enabled_default = False
+
+    @property
+    def native_value(self):
+        battery_data = self.coordinator.data.get(self._battery_serial) or {}
+        return self._config["derive"](battery_data)
 
 
 class BatteryCellStatSensor(BatterySensor):
