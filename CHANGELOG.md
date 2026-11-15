@@ -10,6 +10,26 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-11-15
+
+### Added
+- **Battery Power** (W) per battery: pack voltage × current, positive when
+  charging and negative when discharging, matching the inverter's Battery
+  Power sensor (#61).
+- **Remaining Energy** (kWh) per battery: SOC × Design Capacity, alongside
+  Remaining Capacity (Ah).
+- **Last Data Update** per battery (diagnostic, disabled by default): when the
+  battery's logger last uploaded to the cloud, to spot stale readings.
+
+### Changed
+- "Full Capacity" (Ah) is now named **Full Charge Capacity**. Entity IDs are
+  unchanged.
+
+### Documentation
+- README: how to build charge/discharge energy (kWh) per battery from Battery
+  Power with Home Assistant's Template, Integral and Utility Meter helpers.
+  The cloud provides no live per-battery energy counters.
+
 ## [2.6.0] - 2026-11-15
 
 ### Added

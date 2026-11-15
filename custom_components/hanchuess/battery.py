@@ -79,7 +79,10 @@ def station_battery_values(station_detail: dict | None) -> dict[str, dict]:
             continue
         values[sn] = {
             k: item[k]
-            for k in ("socPack", "sohPack", "devModel", "onlineStatus", "softwareVer")
+            for k in (
+                "socPack", "sohPack", "devModel", "onlineStatus", "softwareVer",
+                "latestDataTimeTs",
+            )
             if item.get(k) is not None
         }
     return values
