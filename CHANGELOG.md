@@ -10,6 +10,38 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-11-15
+
+### Added
+- **Battery-only stations**: Hanchu batteries with a third-party inverter
+  (e.g. LuxPower) can now be added. When no Hanchu inverter is found during
+  setup, stations with Hanchu batteries are offered instead; third-party
+  inverters that appear as placeholders are ignored. Each battery gets its own
+  device under a Hanchu Station device, with the full battery and cell sensor
+  set, polled every 60 seconds by default (minimum 60). No inverter sensors or
+  controls in this mode. Tested on LuxPower systems with 4 and 6 batteries
+  (#61).
+- Diagnostics: for a battery-only station, a redacted outline of the station
+  (inverter brands, battery count, models, shortened serials); for every
+  install, per battery (anonymised), where its last data came from and the
+  error the cloud returned, if any.
+
+### Fixed
+- Batteries are read by the device ID the station lists for them, falling
+  back to the serial. Older batteries registered under a device ID that
+  differs from their serial previously showed Unknown for every sensor. This
+  applies to installs with a Hanchu inverter too.
+- Battery-only stations: if a battery's detail data is unavailable, its SOC,
+  SOH and model are taken from the station list instead of showing Unknown.
+- Battery voltage and current show 2 decimal places and temperatures 1 (pack
+  voltage was shown rounded to whole volts).
+
+### Changed
+- Diagnostics now also redact the station name.
+- Release workflow: tags with a suffix (e.g. `v2.6.0-beta.1`) are published as
+  GitHub pre-releases and may be cut from a branch; `vX.Y.Z` tags are
+  unchanged.
+
 ## [2.5.0] - 2026-11-13
 
 ### Added

@@ -3,6 +3,9 @@ import os
 
 DOMAIN = "hanchuess"
 PLATFORMS = ["sensor", "number", "switch", "select", "time", "button"]
+# Hanchu batteries with a third-party inverter: battery sensors only.
+BATTERY_ONLY_PLATFORMS = ["sensor"]
+MODE_BATTERY_ONLY = "battery_only"
 BASE_URL = os.environ.get("HANCHUESS_URL", "https://iess3.hanchuess.com")
 WEB_CONSOLE_URL = "https://iess3.hanchuess.com/login"
 
@@ -19,6 +22,9 @@ CONF_SCHEDULE_INTERVAL = "schedule_interval"
 DEFAULT_REALTIME_INTERVAL = 60        # seconds
 DEFAULT_STATISTICS_INTERVAL = 300     # seconds
 DEFAULT_BATTERY_INTERVAL = 600        # seconds
+# Battery-only stations: the batteries are the only data, so poll faster.
+DEFAULT_BATTERY_ONLY_INTERVAL = 60    # seconds
+MIN_BATTERY_ONLY_INTERVAL = 60        # seconds
 DEFAULT_FAST_CHARGE_DURATION = 60     # minutes
 DEFAULT_SCHEDULE_INTERVAL = 300       # seconds
 MIN_SCHEDULE_INTERVAL = 60            # seconds

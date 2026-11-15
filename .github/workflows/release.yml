@@ -19,7 +19,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Detect pre-release
+        id: kind
+        # Tags with a suffix, e.g. v2.6.0-beta.1, are published as GitHub
+        # pre-releases: HACS only offers them with "Show beta versions" on.
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Ensure tag is on main
+        # Pre-releases may be cut from a feature branch for testers.
+        if: steps.kind.outputs.prerelease == 'false'
         run: |
           git fetch --quiet origin main
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
@@ -54,4 +67,4 @@ jobs:
           body_path: /tmp/release_notes.md
           files: hanchuess.zip
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.kind.outputs.prerelease == 'true' }}

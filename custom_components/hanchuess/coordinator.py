@@ -8,6 +8,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from .api import HanchuessApiClient, ReauthRequired
+from .battery import battery_dev_ids, station_battery_values
 from .const import (
     DOMAIN,
     CONF_REALTIME_INTERVAL,
@@ -20,6 +21,8 @@ from .const import (
     DEFAULT_REALTIME_INTERVAL,
     DEFAULT_STATISTICS_INTERVAL,
     DEFAULT_BATTERY_INTERVAL,
+    DEFAULT_BATTERY_ONLY_INTERVAL,
+    MODE_BATTERY_ONLY,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -145,22 +148,49 @@ class HanchuessStatisticsCoordinator(DataUpdateCoordinator):
 
 
 class HanchuessBatteryCoordinator(DataUpdateCoordinator):
-    """Battery data coordinator."""
+    """Battery data coordinator.
+
+    Each battery is read with queryBatteryDataDivisions, by its devId from the
+    station list where known (falling back to its sn). For a battery-only
+    station the station list is also read on every poll, so a battery whose
+    detail data is missing still reports SOC/SOH, and the last outcome per
+    battery is kept for diagnostics.
+    """
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: HanchuessApiClient):
+        self.battery_only = entry.data.get("mode") == MODE_BATTERY_ONLY
+        default = DEFAULT_BATTERY_ONLY_INTERVAL if self.battery_only else DEFAULT_BATTERY_INTERVAL
         super().__init__(
             hass,
             _LOGGER,
             name="hanchuess_battery",
             config_entry=entry,
             update_interval=timedelta(
-                seconds=entry.options.get(
-                    CONF_BATTERY_INTERVAL, DEFAULT_BATTERY_INTERVAL
-                )
+                seconds=entry.options.get(CONF_BATTERY_INTERVAL, default)
             ),
         )
         self.entry = entry
         self.client = client
+        self.dev_ids: dict[str, str] = {}
+        # serial -> {"ok", "source", "queried_by", "dev_id_differs", "error"}
+        self.battery_status: dict[str, dict] = {}
+        self.station_detail: dict | None = None
+
+    @staticmethod
+    def _has_detail(result: dict | None) -> bool:
+        if not result or result.get("_token_expired"):
+            return False
+        return bool(result.get("success", True)) and bool(result.get("data"))
+
+    @staticmethod
+    def _error(result: dict | None) -> str | None:
+        if not result:
+            return "no response"
+        if result.get("success") is False or result.get("code") not in (None, 200):
+            return f"code={result.get('code')} msg={result.get('msg')}"
+        if not result.get("data"):
+            return "empty data"
+        return None
 
     async def _async_update_data(self) -> dict:
         battery_serials = self.entry.data.get("battery_serials", [])
@@ -168,18 +198,53 @@ class HanchuessBatteryCoordinator(DataUpdateCoordinator):
             return {}
         language = self.hass.config.language or "en"
 
+        station_values: dict[str, dict] = {}
+        if self.battery_only and self.entry.data.get("stationId"):
+            detail = await self.client.async_get_station_detail(
+                self.entry.data["stationId"], language
+            )
+            if detail and detail.get("success", True) and detail.get("data"):
+                self.station_detail = detail
+                self.dev_ids.update(battery_dev_ids(detail))
+                station_values = station_battery_values(detail)
+
         async def _fetch(serial: str):
-            return serial, await self.client.async_get_battery_data(serial, language)
+            dev_id = self.dev_ids.get(serial) or serial
+            result = await self.client.async_get_battery_data(dev_id, language)
+            queried_by = "devId" if dev_id != serial else "sn"
+            if not self._has_detail(result) and dev_id != serial and not (
+                result and result.get("_token_expired")
+            ):
+                retry = await self.client.async_get_battery_data(serial, language)
+                if self._has_detail(retry):
+                    return serial, retry, "sn"
+            return serial, result, queried_by
 
         results = await asyncio.gather(*(_fetch(serial) for serial in battery_serials))
         data = {}
         token_expired = False
-        for serial, result in results:
+        for serial, result, queried_by in results:
             if result and result.get("_token_expired"):
                 token_expired = True
                 continue
-            if result:
-                data[serial] = result.get("data", {})
+            status = {
+                "queried_by": queried_by,
+                "dev_id_differs": self.dev_ids.get(serial, serial) != serial,
+            }
+            if self._has_detail(result):
+                data[serial] = result.get("data") or {}
+                status.update(ok=True, source="detail", error=None)
+            elif station_values.get(serial):
+                data[serial] = dict(station_values[serial])
+                status.update(ok=True, source="station", error=self._error(result))
+            else:
+                status.update(ok=False, source=None, error=self._error(result))
+            if not status["ok"] or status["source"] != "detail":
+                _LOGGER.debug(
+                    "[HANCHUESS] Battery detail unavailable (%s): %s",
+                    status["queried_by"], status["error"],
+                )
+            self.battery_status[serial] = status
 
         if token_expired:
             refreshed = await _try_refresh(self.client, self._update_entry_token, force=True)

@@ -172,6 +172,27 @@ class HanchuessApiClient:
         _LOGGER.info("[HANCHUESS] getDeviceList: 0 devices")
         return []
 
+    async def async_get_stations(self, language: str = "en") -> list[dict]:
+        """Stations on the account (station/queryList, paged)."""
+        stations: list[dict] = []
+        page = 1
+        while True:
+            result = await self._request(
+                "/gateway/platform/station/queryList",
+                _encrypt_payload({"current": page, "size": 100}),
+                language=language,
+                send_as_json=False,
+            )
+            data = (result or {}).get("data") or {}
+            stations.extend(data.get("records") or [])
+            try:
+                pages = int(data.get("pages") or 1)
+            except (TypeError, ValueError):
+                pages = 1
+            if not result or not result.get("success") or page >= pages:
+                return stations
+            page += 1
+
     async def async_get_station_detail(self, station_id: str, language: str = "en") -> dict:
         """Return station detail including bmsList.
 
