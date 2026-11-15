@@ -287,7 +287,7 @@ After initial setup, polling intervals and fast charge duration can be adjusted 
 
 The older setup, which drives Predbat through this integration with a bridge script via Predbat's generic Service API, is kept for existing users in [docs/predbat-bridge.md](docs/predbat-bridge.md), with its `apps.yaml` template in [docs/hanchu_cloud.yaml](docs/hanchu_cloud.yaml).
 
-## Battery-only Stations (beta)
+## Battery-only Stations
 
 If your Hanchu batteries are paired with **another brand of inverter** (for
 example LuxPower), the integration can add just the batteries. During setup,
