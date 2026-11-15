@@ -10,6 +10,8 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-11-15
+
 ### Added
 - **Battery Power** (W) per battery: pack voltage × current, positive when
   charging and negative when discharging, matching the inverter's Battery
