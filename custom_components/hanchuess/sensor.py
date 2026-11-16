@@ -1,6 +1,7 @@
 """Sensor platform for Hanchuess."""
 import json
 import logging
+import re
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorDeviceClass,
@@ -459,6 +460,85 @@ def _derive_directional_power(value, mode):
     return 0.0 if result == 0 else result
 
 
+# --- PV strings (MPPT inputs) from getDeviceStatus pvListVo -------------------
+
+_QUANTITY = re.compile(r"^\s*(-?\d+(?:\.\d+)?)\s*([a-zA-Z]*)\s*$")
+_POWER_SCALE = {"": 1, "w": 1, "kw": 1000, "mw": 1_000_000}
+_VOLTAGE_SCALE = {"": 1, "v": 1, "mv": 0.001, "kv": 1000}
+
+# Below this string voltage, power / voltage isn't a meaningful current
+# (panels at night or an unused input read a fraction of a volt).
+PV_MIN_VOLTAGE_FOR_CURRENT = 10.0
+
+
+def parse_quantity(value, scales: dict[str, float]):
+    """Parse '1.23kW' / '850W' / '412.5V' (or a plain number) to base units."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    match = _QUANTITY.match(str(value))
+    if not match:
+        return None
+    factor = scales.get(match.group(2).lower())
+    if factor is None:
+        return None
+    return float(match.group(1)) * factor
+
+
+def pv_strings(realtime_data: dict | None) -> dict[str, dict]:
+    """PV strings by name ('PV1', ...) -> {'power', 'voltage', 'current'}."""
+    strings = {}
+    for item in (realtime_data or {}).get("pvListVo") or []:
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        power = parse_quantity(item.get("power"), _POWER_SCALE)
+        voltage = parse_quantity(item.get("voltage"), _VOLTAGE_SCALE)
+        current = None
+        if power is not None and voltage is not None and voltage >= PV_MIN_VOLTAGE_FOR_CURRENT:
+            current = round(power / voltage, 2)
+        strings[name] = {
+            "power": None if power is None else round(power, 1),
+            "voltage": None if voltage is None else round(voltage, 1),
+            "current": current,
+        }
+    return strings
+
+
+PV_STRING_SENSORS = {
+    "power": {
+        "device_class": SensorDeviceClass.POWER,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "unit": UnitOfPower.WATT,
+        "precision": 0,
+        "icon": "mdi:solar-power",
+    },
+    "voltage": {
+        "device_class": SensorDeviceClass.VOLTAGE,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "unit": UnitOfElectricPotential.VOLT,
+        "precision": 1,
+        "icon": "mdi:solar-panel",
+    },
+    "current": {
+        "device_class": SensorDeviceClass.CURRENT,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "unit": UnitOfElectricCurrent.AMPERE,
+        "precision": 2,
+        "icon": "mdi:current-dc",
+    },
+}
+
+
+def _ac_coupled(realtime_data: dict | None) -> bool:
+    """bypMeterSwitch 1 = AC-coupled PV (PV inputs usually unused)."""
+    try:
+        return int((realtime_data or {}).get("bypMeterSwitch")) == 1
+    except (TypeError, ValueError):
+        return False
+
+
 def battery_power_w(battery_data: dict):
     """Battery power in watts: pack voltage x current.
 
@@ -622,6 +702,14 @@ async def async_setup_entry(
         return
     entities.append(DeviceStatusSensor(realtime, entry))
     entities.append(InverterStatusSensor(realtime, entry))
+    # One set of sensors per PV string the inverter reports. On AC-coupled
+    # systems the inputs are usually unused, so they start disabled there.
+    pv_enabled = not _ac_coupled(realtime.data)
+    for string_name in pv_strings(realtime.data):
+        for measure in PV_STRING_SENSORS:
+            entities.append(
+                PvStringSensor(realtime, entry, string_name, measure, pv_enabled)
+            )
     for sensor_key, config in SENSORS.items():
         cond_key = config.get("condition_key")
         if cond_key:
@@ -764,6 +852,26 @@ DERIVED_BATTERY_SENSORS = {
         "enabled_default": False,
     },
 }
+
+
+class PvStringSensor(HanchueSensor):
+    """Power, voltage or (calculated) current of one PV string."""
+
+    def __init__(self, coordinator, entry, string_name: str, measure: str, enabled: bool):
+        slug = string_name.lower().replace(" ", "_")
+        config = PV_STRING_SENSORS[measure]
+        super().__init__(coordinator, entry, f"{slug}_{measure}", config)
+        self._string_name = string_name
+        self._measure = measure
+        self._attr_translation_key = f"pv_string_{measure}"
+        self._attr_translation_placeholders = {"string": string_name}
+        self._attr_suggested_display_precision = config["precision"]
+        self._attr_entity_registry_enabled_default = enabled
+
+    @property
+    def native_value(self):
+        string = pv_strings(self.coordinator.data).get(self._string_name)
+        return None if string is None else string[self._measure]
 
 
 class BatteryDerivedSensor(BatterySensor):

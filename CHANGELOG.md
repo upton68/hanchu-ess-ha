@@ -10,6 +10,18 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Added
+- **PV string sensors**: Power (W) and Voltage (V) for each PV input the
+  inverter reports (PV1, PV2, PV3 on 3-MPPT models), plus Current (A)
+  calculated as power ÷ voltage (unknown below 10 V). Read from the realtime
+  data the integration already polls, so there are no extra cloud calls.
+  Disabled by default on AC-coupled systems.
+
+### Fixed
+- Translation files had a duplicate "battery_power" key (inverter and
+  per-battery sensors). Both names were identical, so nothing displayed
+  differently. A test now guards against duplicate keys.
+
 ## [2.7.0] - 2026-11-15
 
 ### Added

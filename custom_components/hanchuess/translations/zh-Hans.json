@@ -72,6 +72,9 @@
         }
       },
       "battery_soc": { "name": "电池电量" },
+      "pv_string_power": { "name": "{string}功率" },
+      "pv_string_voltage": { "name": "{string}电压" },
+      "pv_string_current": { "name": "{string}电流" },
       "battery_power": { "name": "电池功率" },
       "battery_charge_power": { "name": "电池充电功率" },
       "battery_discharge_power": { "name": "电池放电功率" },
@@ -84,7 +87,6 @@
       "battery_current": { "name": "电池电流" },
       "battery_design_capacity": { "name": "设计容量" },
       "battery_full_capacity": { "name": "满充容量" },
-      "battery_power": { "name": "电池功率" },
       "battery_remaining_energy": { "name": "剩余电量" },
       "battery_last_data_update": { "name": "最后数据更新" },
       "battery_remaining_capacity": { "name": "剩余容量" },

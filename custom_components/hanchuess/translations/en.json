@@ -72,6 +72,9 @@
         }
       },
       "battery_soc": { "name": "Battery SOC" },
+      "pv_string_power": { "name": "{string} Power" },
+      "pv_string_voltage": { "name": "{string} Voltage" },
+      "pv_string_current": { "name": "{string} Current" },
       "battery_power": { "name": "Battery Power" },
       "battery_charge_power": { "name": "Battery Charge Power" },
       "battery_discharge_power": { "name": "Battery Discharge Power" },
@@ -84,7 +87,6 @@
       "battery_current": { "name": "Battery Current" },
       "battery_design_capacity": { "name": "Design Capacity" },
       "battery_full_capacity": { "name": "Full Charge Capacity" },
-      "battery_power": { "name": "Battery Power" },
       "battery_remaining_energy": { "name": "Remaining Energy" },
       "battery_last_data_update": { "name": "Last Data Update" },
       "battery_remaining_capacity": { "name": "Remaining Capacity" },
