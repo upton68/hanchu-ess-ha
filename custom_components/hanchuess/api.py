@@ -9,6 +9,15 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .crypto import _encrypt_payload
 
+MINUTE_CHART_MAX_COUNT = 1440
+
+
+def _mark_token_expired(result: dict | None) -> dict | None:
+    """Turn a 401 into the {"_token_expired": True} marker coordinators use."""
+    if result and result.get("code") == 401:
+        return {"_token_expired": True}
+    return result
+
 _LOGGER = logging.getLogger(__name__)
 
 TOKEN_REFRESH_DAYS = 25
@@ -213,6 +222,8 @@ class HanchuessApiClient:
                 language=language,
                 send_as_json=False,
             )
+            if result and result.get("code") == 401:
+                return {"_token_expired": True}
             if result and result.get("success"):
                 return result
             _LOGGER.debug(
@@ -232,7 +243,30 @@ class HanchuessApiClient:
             language=language,
             send_as_json=False,
         )
-        return result or {}
+        return _mark_token_expired(result) or {}
+
+    async def async_get_battery_minute_chart(
+        self, device_id: str, start_ms: int, end_ms: int, language: str = "en"
+    ) -> dict:
+        """A battery's minute samples between two times (bmsInfo/powerMinuteChart).
+
+        Each sample carries vPack, iPack and dataTimeTs, among others. At most
+        1440 samples come back per call.
+        """
+        payload = _encrypt_payload({
+            "sn": device_id,
+            "devType": "1",
+            "maxCount": MINUTE_CHART_MAX_COUNT,
+            "dataTimeTsStart": int(start_ms),
+            "dataTimeTsEnd": int(end_ms),
+        })
+        result = await self._request(
+            "/gateway/platform/bmsInfo/powerMinuteChart",
+            payload,
+            language=language,
+            send_as_json=False,
+        )
+        return _mark_token_expired(result) or {}
 
     async def async_get_device_status(self, sn: str, language: str = "en") -> dict | None:
         result = await self._request(

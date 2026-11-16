@@ -50,6 +50,7 @@
           "realtime_interval": "实时轮询间隔（秒）",
           "statistics_interval": "统计轮询间隔（秒）",
           "battery_interval": "电池轮询间隔（秒）",
+          "energy_interval": "电池电量统计轮询间隔（秒）",
           "fast_charge_duration": "快充/快放时长（分钟)",
           "schedule_interval": "逆变器状态计划轮询间隔（秒）"
         }
@@ -85,6 +86,18 @@
       "battery_design_capacity": { "name": "设计容量" },
       "battery_full_capacity": { "name": "满充容量" },
       "battery_power": { "name": "电池功率" },
+      "battery_charge_today": { "name": "今日充电量" },
+      "battery_discharge_today": { "name": "今日放电量" },
+      "battery_charge_total": { "name": "累计充电量" },
+      "battery_discharge_total": { "name": "累计放电量" },
+      "battery_state": {
+        "name": "电池状态",
+        "state": {
+          "idle": "空闲",
+          "charging": "充电中",
+          "discharging": "放电中"
+        }
+      },
       "battery_remaining_energy": { "name": "剩余电量" },
       "battery_last_data_update": { "name": "最后数据更新" },
       "battery_remaining_capacity": { "name": "剩余容量" },

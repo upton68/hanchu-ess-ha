@@ -10,6 +10,23 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Added
+- **Charge Today, Discharge Today, Charge Total and Discharge Total** (kWh)
+  per battery, on normal installs and battery-only stations. Calculated from
+  each battery's minute-by-minute voltage and current in the cloud
+  (`bmsInfo/powerMinuteChart`), fetched incrementally. Today resets at local
+  midnight. Totals are saved across restarts (missed time is filled in, up
+  to 3 days) and work in the Energy dashboard. Gaps over 5 minutes are
+  skipped.
+- **Battery State** per battery: Idle, Charging or Discharging.
+- **Battery energy poll interval** option (default 5 minutes, minimum 1
+  minute), on both the normal and battery-only options screens.
+- Diagnostics include each battery's energy state (anonymised).
+
+### Fixed
+- Battery reads on battery-only stations now refresh the token on a 401 like
+  the other endpoints, instead of failing until the next scheduled refresh.
+
 ## [2.7.0] - 2026-11-15
 
 ### Added
