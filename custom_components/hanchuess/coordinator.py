@@ -372,6 +372,8 @@ class HanchuessBatteryEnergyCoordinator(DataUpdateCoordinator):
         self.states: dict[str, BatteryEnergyState] = {}
         self.errors: dict[str, str | None] = {}
         self._query_by: dict[str, str] = {}  # sn -> id that returned samples
+        # Whether the cloud accepts a range starting mid-day (None = not known yet).
+        self._incremental: bool | None = None
         self._store = Store(hass, 1, energy_store_key(entry.entry_id))
         self._loaded = False
 
@@ -390,40 +392,71 @@ class HanchuessBatteryEnergyCoordinator(DataUpdateCoordinator):
         end = dt_util.start_of_local_day(day + _td(days=1))
         return int(start.timestamp() * 1000), int(end.timestamp() * 1000) - 1
 
-    async def _fetch_range(self, serial: str, state: BatteryEnergyState,
-                           start_ms: int, end_ms: int, language: str) -> bool:
-        """Count samples in [start, end] newer than the last one counted."""
-        if state.last_ts is not None:
-            start_ms = max(start_ms, state.last_ts + 1)
-        if start_ms > end_ms:
+    async def _chart(self, candidate: str, start_ms: int, end_ms: int, language: str) -> dict:
+        result = await self.client.async_get_battery_minute_chart(
+            candidate, start_ms, end_ms, language
+        )
+        if result.get("_token_expired"):
+            raise _TokenExpired
+        return result
+
+    @staticmethod
+    def _failed(result: dict) -> bool:
+        return result.get("success") is False or result.get("code") not in (None, 200)
+
+    async def _fetch_day(self, serial: str, state: BatteryEnergyState,
+                         day_start: int, day_end: int, language: str) -> bool:
+        """Count the samples of one local day newer than the last one counted.
+
+        The cloud expects the range to end at the end of the day, as the web
+        console sends it. The start is moved on to the last sample counted so
+        only new samples come back; if the cloud refuses that, the whole day
+        is asked for instead (already-counted samples are skipped).
+        """
+        incremental = (
+            state.last_ts is not None
+            and state.last_ts >= day_start
+            and self._incremental is not False
+        )
+        start_ms = state.last_ts + 1 if incremental else day_start
+        if start_ms > day_end:
             return True
         dev_id = self.dev_ids.get(serial) or serial
         candidates = [self._query_by[serial]] if serial in self._query_by else [dev_id]
         if serial not in candidates:
             candidates.append(serial)
         for candidate in candidates:
-            result = await self.client.async_get_battery_minute_chart(
-                candidate, start_ms, end_ms, language
-            )
-            if result.get("_token_expired"):
-                raise _TokenExpired
-            if result.get("success") is False or result.get("code") not in (None, 200):
-                self.errors[serial] = f"code={result.get('code')} msg={result.get('msg')}"
+            result = await self._chart(candidate, start_ms, day_end, language)
+            if self._failed(result) and incremental:
+                retry = await self._chart(candidate, day_start, day_end, language)
+                if not self._failed(retry):
+                    _LOGGER.debug(
+                        "[HANCHUESS] Minute chart refused a mid-day start; "
+                        "fetching whole days from now on"
+                    )
+                    self._incremental = False
+                    incremental = False
+                    result = retry
+            if self._failed(result):
+                self.errors[serial] = (
+                    f"code={result.get('code')} "
+                    f"msg={result.get('msg') or result.get('message')}"
+                )
                 continue
             samples = _minute_samples(result)
             if not samples and candidate != candidates[-1]:
                 continue  # maybe registered under the other ID
             if samples:
                 self._query_by[serial] = candidate
+                if incremental:
+                    self._incremental = True
             add_samples(state, samples)
             # A full page may mean more samples in the range: fetch the rest.
             pages = 1
             while len(samples) >= MINUTE_CHART_PAGE and pages < 3 and state.last_ts:
-                result = await self.client.async_get_battery_minute_chart(
-                    candidate, state.last_ts + 1, end_ms, language
-                )
-                if result.get("_token_expired"):
-                    raise _TokenExpired
+                result = await self._chart(candidate, state.last_ts + 1, day_end, language)
+                if self._failed(result):
+                    break
                 samples = _minute_samples(result)
                 add_samples(state, samples)
                 pages += 1
@@ -434,8 +467,7 @@ class HanchuessBatteryEnergyCoordinator(DataUpdateCoordinator):
         return False
 
     async def _update_battery(self, serial: str, language: str) -> bool:
-        now = dt_util.now()
-        today = now.date()
+        today = dt_util.now().date()
         state = self.states.setdefault(serial, BatteryEnergyState())
         if state.day is None:
             state.start_day(today.isoformat())
@@ -448,14 +480,12 @@ class HanchuessBatteryEnergyCoordinator(DataUpdateCoordinator):
             day = today
         while day < today:
             start, end = self._day_bounds(day)
-            if not await self._fetch_range(serial, state, start, end, language):
+            if not await self._fetch_day(serial, state, start, end, language):
                 return False  # retry the same day next poll
             day += _td(days=1)
             state.start_day(day.isoformat())
-        start, _end = self._day_bounds(today)
-        return await self._fetch_range(
-            serial, state, start, int(now.timestamp() * 1000), language
-        )
+        start, end = self._day_bounds(today)
+        return await self._fetch_day(serial, state, start, end, language)
 
     async def _async_update_data(self) -> dict:
         if not self._loaded:

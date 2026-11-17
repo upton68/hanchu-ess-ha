@@ -125,8 +125,18 @@ def _entry(hass, serials=("B1",)):
     return entry
 
 
-def _chart_client(series_by_id):
-    """Fake client answering powerMinuteChart from {id: [samples]} by range."""
+def _end_of_day_ms(start_ms: int) -> int:
+    day = dt_util.as_local(dt_util.utc_from_timestamp(start_ms / 1000)).date()
+    return _ms(dt_util.start_of_local_day(day + timedelta(days=1))) - 1
+
+
+def _chart_client(series_by_id, whole_days_only=False):
+    """Fake client answering powerMinuteChart from {id: [samples]} by range.
+
+    Like the real cloud, it refuses (code 100) a range that doesn't end at
+    the end of the start's local day. With whole_days_only it also refuses a
+    start that isn't midnight.
+    """
     client = MagicMock()
     client.token = "tok"
     client._reauth_triggered = False
@@ -134,6 +144,10 @@ def _chart_client(series_by_id):
 
     async def chart(dev_id, start, end, language="en"):
         calls.append((dev_id, start, end))
+        if end != _end_of_day_ms(start):
+            return {"code": 100, "success": False}
+        if whole_days_only and end - start != 86_400_000 - 1:
+            return {"code": 100, "success": False}
         if dev_id not in series_by_id:
             return {"code": 200, "success": True, "data": []}
         rows = [s for s in series_by_id[dev_id] if start <= s["dataTimeTs"] <= end]
@@ -170,8 +184,10 @@ async def test_coordinator_counts_today_and_fetches_incrementally(hass: HomeAssi
         assert data["B1"]["day"] == now.date().isoformat()
         last = data["B1"]["last_ts"]
         await coordinator._async_update_data()
-    # Second poll asks only for samples after the last one counted.
+    # Second poll asks only for samples after the last one counted, and
+    # every request ends at the end of the day, as the web console sends it.
     assert client.calls[-1][1] == last + 1
+    assert all(end == _end_of_day_ms(start) for _, start, end in client.calls)
     assert coordinator.states["B1"].charge_total == pytest.approx(1.0)
 
 
@@ -412,3 +428,20 @@ async def test_api_battery_data_marks_401():
     client = HanchuessApiClient.__new__(HanchuessApiClient)
     client._request = AsyncMock(return_value={"code": 401, "msg": "expired"})
     assert await client.async_get_battery_data("D1") == {"_token_expired": True}
+
+
+
+async def test_coordinator_falls_back_to_whole_days(hass: HomeAssistant):
+    entry = _entry(hass)
+    client = _chart_client({"B1": _today_series(31)}, whole_days_only=True)
+    coordinator = await _coord(hass, client, entry)
+    now = dt_util.start_of_local_day() + timedelta(hours=1)
+    with patch("custom_components.hanchuess.coordinator.dt_util.now", return_value=now):
+        first = await coordinator._async_update_data()
+        total = first["B1"]["charge_total"]
+        await coordinator._async_update_data()  # mid-day start refused -> whole day
+        await coordinator._async_update_data()  # goes straight to whole day
+    assert coordinator._incremental is False
+    assert coordinator.states["B1"].charge_total == pytest.approx(total)  # no double count
+    assert coordinator.errors["B1"] is None
+    assert len(client.calls) == 4  # 1 + (refused + retry) + 1
