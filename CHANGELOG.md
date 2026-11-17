@@ -10,6 +10,10 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.8.0-beta.1] - 2026-11-17
+
+Beta for testers with DC-coupled solar (PV strings on the Hanchu inverter).
+
 ### Added
 - **PV string sensors**: Power (W) and Voltage (V) for each PV input the
   inverter reports (PV1, PV2, PV3 on 3-MPPT models), plus Current (A)
