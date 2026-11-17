@@ -17,7 +17,8 @@ Beta for testers with DC-coupled solar (PV strings on the Hanchu inverter).
 ### Added
 - **PV string sensors**: Power (W) and Voltage (V) for each PV input the
   inverter reports (PV1, PV2, PV3 on 3-MPPT models), plus Current (A)
-  calculated as power ÷ voltage (unknown below 10 V). Read from the realtime
+  calculated as power ÷ voltage (unknown below 10 V). The cloud reports
+  string power to 0.01 kW, so each string is accurate to about 10 W. Read from the realtime
   data the integration already polls, so there are no extra cloud calls.
   Disabled by default on AC-coupled systems.
 
