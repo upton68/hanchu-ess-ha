@@ -18,6 +18,8 @@ def _mark_token_expired(result: dict | None) -> dict | None:
         return {"_token_expired": True}
     return result
 
+from homeassistant.util import dt as dt_util
+
 _LOGGER = logging.getLogger(__name__)
 
 TOKEN_REFRESH_DAYS = 25
@@ -41,6 +43,8 @@ class HanchuessApiClient:
         self._last_refresh_attempt = 0
         self._account: str | None = None
         self._password: str | None = None
+        # Which minute-chart header set the cloud accepted (None = not yet known).
+        self._chart_headers_idx: int | None = None
 
     @property
     def token(self) -> str:
@@ -83,6 +87,7 @@ class HanchuessApiClient:
         language: str = "en",
         retries: int = 3,
         send_as_json: bool = True,
+        extra_headers: dict | None = None,
     ) -> dict:
         url = f"{self._domain}{path}"
         _LOGGER.debug("[HANCHUESS] request: %s token=%s", url, "yes" if self._token else "no")
@@ -90,6 +95,8 @@ class HanchuessApiClient:
         for attempt in range(1, retries + 1):
             try:
                 headers = self._headers(language)
+                if extra_headers:
+                    headers.update(extra_headers)
                 request_kwargs = {"json": data}
                 if not send_as_json:
                     headers.pop("Content-Type", None)
@@ -251,7 +258,12 @@ class HanchuessApiClient:
         """A battery's minute samples between two times (bmsInfo/powerMinuteChart).
 
         Each sample carries vPack, iPack and dataTimeTs, among others. At most
-        1440 samples come back per call.
+        1440 samples come back per call. The range should run to the end of a
+        local day, as the web console sends it.
+
+        The cloud refuses this call (code 100) without the console's time zone
+        headers, and may also want the console's appPlat. The header sets are
+        tried in turn and the one that works is remembered.
         """
         payload = _encrypt_payload({
             "sn": device_id,
@@ -260,13 +272,48 @@ class HanchuessApiClient:
             "dataTimeTsStart": int(start_ms),
             "dataTimeTsEnd": int(end_ms),
         })
-        result = await self._request(
-            "/gateway/platform/bmsInfo/powerMinuteChart",
-            payload,
-            language=language,
-            send_as_json=False,
-        )
+        variants = self._minute_chart_header_sets()
+        order = list(range(len(variants)))
+        known = getattr(self, "_chart_headers_idx", None)
+        if known is not None:
+            order.remove(known)
+            order.insert(0, known)
+        result = None
+        for idx in order:
+            result = await self._request(
+                "/gateway/platform/bmsInfo/powerMinuteChart",
+                payload,
+                language=language,
+                send_as_json=False,
+                extra_headers=variants[idx],
+            )
+            if result and result.get("code") == 200:
+                if known != idx:
+                    _LOGGER.debug("[HANCHUESS] minute chart accepted header set %s", idx)
+                self._chart_headers_idx = idx
+                break
+            if not result or result.get("code") == 401:
+                break
         return _mark_token_expired(result) or {}
+
+    def _minute_chart_header_sets(self) -> list[dict]:
+        """Header sets for the minute chart, mirroring the web console."""
+        hass = getattr(self, "_hass", None)
+        tz_name = getattr(getattr(hass, "config", None), "time_zone", None)
+        if not isinstance(tz_name, str) or not tz_name:
+            tz_name = "UTC"
+        try:
+            offset = dt_util.now(dt_util.get_time_zone(tz_name)).utcoffset()
+            minutes = int(offset.total_seconds() // 60) if offset else 0
+        except Exception:  # noqa: BLE001 - unknown zone: fall back to UTC
+            minutes = 0
+        if minutes == 0:
+            selected = "GMT"
+        else:
+            sign = "+" if minutes > 0 else "-"
+            selected = f"GMT{sign}{abs(minutes) // 60:02d}:{abs(minutes) % 60:02d}"
+        tz_headers = {"timezone": tz_name, "timeselected": selected}
+        return [tz_headers, {**tz_headers, "appPlat": "iess"}]
 
     async def async_get_device_status(self, sn: str, language: str = "en") -> dict | None:
         result = await self._request(

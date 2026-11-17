@@ -402,6 +402,9 @@ async def test_api_minute_chart_payload_and_401():
     client._request = AsyncMock(return_value={"code": 200, "data": []})
     await client.async_get_battery_minute_chart("D1", 1, 2, "en")
     path, payload = client._request.await_args.args[:2]
+    headers = client._request.await_args.kwargs["extra_headers"]
+    assert headers["timezone"] and headers["timeselected"].startswith("GMT")
+    assert "appPlat" not in headers
     assert path == "/gateway/platform/bmsInfo/powerMinuteChart"
     assert payload == _encrypt_payload({"sn": "D1", "devType": "1", "maxCount": 1440,
                                         "dataTimeTsStart": 1, "dataTimeTsEnd": 2})
@@ -445,3 +448,38 @@ async def test_coordinator_falls_back_to_whole_days(hass: HomeAssistant):
     assert coordinator.states["B1"].charge_total == pytest.approx(total)  # no double count
     assert coordinator.errors["B1"] is None
     assert len(client.calls) == 4  # 1 + (refused + retry) + 1
+
+
+
+async def test_api_minute_chart_header_fallback_is_remembered():
+    from custom_components.hanchuess.api import HanchuessApiClient
+
+    client = HanchuessApiClient.__new__(HanchuessApiClient)
+    client._hass = SimpleNamespace(config=SimpleNamespace(time_zone="Europe/London"))
+    client._chart_headers_idx = None
+
+    async def request(path, payload, **kwargs):
+        ok = kwargs["extra_headers"].get("appPlat") == "iess"
+        return {"code": 200, "data": []} if ok else {"code": 100, "success": False}
+
+    client._request = AsyncMock(side_effect=request)
+    assert (await client.async_get_battery_minute_chart("D1", 1, 2))["code"] == 200
+    assert client._request.await_count == 2
+    sent = client._request.await_args.kwargs["extra_headers"]
+    assert sent["timezone"] == "Europe/London"
+    assert sent["timeselected"] in ("GMT", "GMT+01:00")
+    # Next call goes straight to the set that worked.
+    await client.async_get_battery_minute_chart("D1", 1, 2)
+    assert client._request.await_count == 3
+
+
+def test_minute_chart_timeselected_label():
+    from custom_components.hanchuess.api import HanchuessApiClient
+
+    client = HanchuessApiClient.__new__(HanchuessApiClient)
+    client._hass = SimpleNamespace(config=SimpleNamespace(time_zone="Asia/Kolkata"))
+    assert client._minute_chart_header_sets()[0] == {
+        "timezone": "Asia/Kolkata", "timeselected": "GMT+05:30",
+    }
+    client._hass = SimpleNamespace(config=SimpleNamespace(time_zone="America/Bogota"))
+    assert client._minute_chart_header_sets()[0]["timeselected"] == "GMT-05:00"
