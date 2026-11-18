@@ -32,6 +32,7 @@ from .coordinator import (
     HanchuessBatteryCoordinator,
     HanchuessScheduleCoordinator,
     HanchuessBatteryEnergyCoordinator,
+    HanchuessHistoryCoordinator,
     energy_store_key,
 )
 from .staging import SettingsStagingBuffer
@@ -89,6 +90,7 @@ class HanchuessData:
     battery_only: bool = False
     # Per-battery charge/discharge energy from the minute samples.
     energy: HanchuessBatteryEnergyCoordinator | None = None
+    history: HanchuessHistoryCoordinator | None = None
     # Redacted outline of the station (battery-only), for diagnostics.
     station_summary: dict | None = None
 
@@ -766,6 +768,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
         inverter_model=inverter_model,
         schedule=schedule_coordinator,
         energy=_start_energy(hass, entry, client, battery_coordinator),
+        history=_start_history(hass, entry, client),
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -815,6 +818,15 @@ def _start_energy(hass, entry, client, battery_coordinator):
         hass, energy.async_refresh(), "hanchuess battery energy first read"
     )
     return energy
+
+
+def _start_history(hass, entry, client):
+    """Create the station energy history coordinator; first read in the background."""
+    history = HanchuessHistoryCoordinator(hass, entry, client)
+    entry.async_create_background_task(
+        hass, history.async_refresh(), "hanchuess energy history first read"
+    )
+    return history
 
 
 async def _async_setup_battery_only(

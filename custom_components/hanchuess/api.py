@@ -10,6 +10,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .crypto import _encrypt_payload
 
 MINUTE_CHART_MAX_COUNT = 1440
+# Station energy history (the console's Statistics charts).
+STATION_HISTORY_PATH = "/gateway/platform/pcs/historyStaticsChart"
 
 
 def _mark_token_expired(result: dict | None) -> dict | None:
@@ -272,6 +274,37 @@ class HanchuessApiClient:
             "dataTimeTsStart": int(start_ms),
             "dataTimeTsEnd": int(end_ms),
         })
+        return await self._console_post(
+            "/gateway/platform/bmsInfo/powerMinuteChart", payload, language
+        )
+
+    async def async_get_station_history(
+        self, sn: str, date_str: str, language: str = "en"
+    ) -> dict:
+        """Station energy totals from the console's history chart.
+
+        date_str "2026" gives one row per month of that year ("2026-01" ...);
+        "0" gives one row per year ("2025", "2026"). Each row has pvDge,
+        loadEe, gridTdEe, gridTdFe, batTdChg and batTdDschg in kWh. Sent
+        exactly as the web console sends it, including masterSum (which adds
+        parallel inverters into the station total).
+        """
+        payload = _encrypt_payload({
+            "sn": sn,
+            "devType": "2",
+            "maxCount": MINUTE_CHART_MAX_COUNT,
+            "dateStr": date_str,
+            "masterSum": True,
+        })
+        return await self._console_post(STATION_HISTORY_PATH, payload, language)
+
+    async def _console_post(self, path: str, payload: str, language: str) -> dict:
+        """POST to a web-console endpoint with the console's headers.
+
+        The console endpoints refuse calls (code 100) without its time zone
+        headers, and may also want its appPlat. The header sets are tried in
+        turn and the one that works is remembered.
+        """
         variants = self._minute_chart_header_sets()
         order = list(range(len(variants)))
         known = getattr(self, "_chart_headers_idx", None)
@@ -281,7 +314,7 @@ class HanchuessApiClient:
         result = None
         for idx in order:
             result = await self._request(
-                "/gateway/platform/bmsInfo/powerMinuteChart",
+                path,
                 payload,
                 language=language,
                 send_as_json=False,
@@ -289,7 +322,7 @@ class HanchuessApiClient:
             )
             if result and result.get("code") == 200:
                 if known != idx:
-                    _LOGGER.debug("[HANCHUESS] minute chart accepted header set %s", idx)
+                    _LOGGER.debug("[HANCHUESS] console accepted header set %s", idx)
                 self._chart_headers_idx = idx
                 break
             if not result or result.get("code") == 401:

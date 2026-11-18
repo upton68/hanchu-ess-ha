@@ -11,6 +11,16 @@ later versions are tracked here going forward.
 ## [Unreleased]
 
 ### Added
+- **Monthly, Yearly and Lifetime energy** (kWh) for PV, Load, Grid Import,
+  Grid Export, Battery Charge and Battery Discharge, on the inverter device.
+  Taken from the cloud's own statistics (`pcs/historyStaticsChart`, as the
+  web console's Statistics charts use), so they stay right across Home
+  Assistant downtime. Lifetime suits the Energy dashboard. (Discussion #69)
+- **Energy history poll interval** option (default 1 hour, minimum 15
+  minutes).
+- Diagnostics include the energy history figures and any errors.
+
+### Added
 - **Charge Today, Discharge Today, Charge Total and Discharge Total** (kWh)
   per battery, on normal installs and battery-only stations. Calculated from
   each battery's minute-by-minute voltage and current in the cloud
