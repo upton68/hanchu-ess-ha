@@ -214,3 +214,21 @@ async def test_diagnostics_reports_unrecognised_dev_model():
     )
     diag = await async_get_config_entry_diagnostics(MagicMock(), entry)
     assert diag["inverter_model"] == {"dev_model": "99", "name": None}
+
+
+async def test_battery_energy_section_is_anonymised():
+    entry = _FakeEntry()
+    energy = SimpleNamespace(
+        data={"BAT-1": {"charge_today": 1.2, "charge_total": 30.0, "last_ts": 5}},
+        errors={"BAT-2": "code=500 msg=x"},
+    )
+    entry.runtime_data = _make_runtime_data(energy=energy)
+    diag = await async_get_config_entry_diagnostics(MagicMock(), entry)
+    assert diag["battery_energy"] == {
+        "battery_1": {
+            "state": {"charge_today": 1.2, "charge_total": 30.0, "last_ts": 5},
+            "error": None,
+        },
+        "battery_2": {"state": None, "error": "code=500 msg=x"},
+    }
+    assert "BAT-1" not in str(diag["battery_energy"])

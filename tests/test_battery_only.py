@@ -130,6 +130,9 @@ async def test_setup_battery_only_entry(hass: HomeAssistant):
     assert data.battery_only is True
     assert data.realtime is None and data.statistics is None and data.schedule is None
     assert data.battery is not None
+    # Battery energy coordinator shares the battery coordinator's devId map.
+    assert data.energy is not None
+    assert data.energy.dev_ids is data.battery.dev_ids
     # Newly listed battery added to the entry.
     assert entry.data["battery_serials"] == ["B1", "B2"]
     # Station device is the batteries' parent.

@@ -577,6 +577,13 @@ def _battery_entities(entry, battery_coordinator) -> list:
             entities.append(
                 BatteryModelSensor(battery_coordinator, entry, battery_serial)
             )
+            entities.append(BatteryStateSensor(battery_coordinator, entry, battery_serial))
+            energy = getattr(getattr(entry, "runtime_data", None), "energy", None)
+            if energy is not None:
+                for sensor_key in BATTERY_ENERGY_SENSORS:
+                    entities.append(
+                        BatteryEnergySensor(energy, entry, battery_serial, sensor_key)
+                    )
             for sensor_key, config in DERIVED_BATTERY_SENSORS.items():
                 entities.append(
                     BatteryDerivedSensor(
@@ -764,6 +771,86 @@ DERIVED_BATTERY_SENSORS = {
         "enabled_default": False,
     },
 }
+
+
+# Per-battery energy from the minute samples (HanchuessBatteryEnergyCoordinator).
+BATTERY_ENERGY_SENSORS = {
+    "battery_charge_today": {"field": "charge_today", "icon": "mdi:battery-arrow-up"},
+    "battery_discharge_today": {"field": "discharge_today", "icon": "mdi:battery-arrow-down"},
+    "battery_charge_total": {"field": "charge_total", "icon": "mdi:battery-arrow-up-outline"},
+    "battery_discharge_total": {"field": "discharge_total", "icon": "mdi:battery-arrow-down-outline"},
+}
+
+# stateBat from the battery data.
+BATTERY_STATES = {0: "idle", 1: "charging", 2: "discharging"}
+
+
+class BatteryEnergySensor(CoordinatorEntity, SensorEntity):
+    """Charge/discharge energy for one battery, today or in total."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, coordinator, entry, battery_serial: str, sensor_key: str):
+        super().__init__(coordinator)
+        self._entry = entry
+        self._battery_serial = battery_serial
+        self._sensor_key = sensor_key
+        self._field = BATTERY_ENERGY_SENSORS[sensor_key]["field"]
+        self._attr_unique_id = f"{battery_serial}_{sensor_key}"
+        self._attr_translation_key = sensor_key
+        self._attr_icon = BATTERY_ENERGY_SENSORS[sensor_key]["icon"]
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return _battery_device_info(
+            self._entry, self._entry.runtime_data.battery, self._battery_serial
+        )
+
+    @property
+    def native_value(self):
+        state = (self.coordinator.data or {}).get(self._battery_serial)
+        if not state or state.get("last_ts") is None:
+            return None
+        if self._field.endswith("_today") and state.get("day") != dt_util.now().date().isoformat():
+            return 0.0  # no samples counted yet for the new day
+        return round(float(state.get(self._field) or 0.0), 3)
+
+
+class BatteryStateSensor(BatterySensor):
+    """Idle, charging or discharging, from the battery's own state (stateBat)."""
+
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = list(BATTERY_STATES.values())
+
+    def __init__(self, coordinator, entry, battery_serial):
+        super().__init__(
+            coordinator, entry, battery_serial, "battery_state",
+            {"key": "stateBat", "icon": "mdi:battery-sync"},
+        )
+        self._attr_device_class = SensorDeviceClass.ENUM
+        self._attr_native_unit_of_measurement = None
+
+    @property
+    def native_value(self):
+        battery_data = (self.coordinator.data or {}).get(self._battery_serial) or {}
+        try:
+            return BATTERY_STATES.get(int(battery_data.get("stateBat")))
+        except (TypeError, ValueError):
+            pass
+        # No stateBat in this payload: go by the current's direction.
+        try:
+            current = float(battery_data.get("iPack"))
+        except (TypeError, ValueError):
+            return None
+        if current > 0.1:
+            return "charging"
+        if current < -0.1:
+            return "discharging"
+        return "idle"
 
 
 class BatteryDerivedSensor(BatterySensor):

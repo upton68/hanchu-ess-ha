@@ -24,6 +24,9 @@ from .const import (
     MIN_SCHEDULE_INTERVAL,
     DEFAULT_BATTERY_ONLY_INTERVAL,
     MIN_BATTERY_ONLY_INTERVAL,
+    CONF_ENERGY_INTERVAL,
+    DEFAULT_ENERGY_INTERVAL,
+    MIN_ENERGY_INTERVAL,
 )
 from .battery import battery_only_serials, extract_battery_serials
 from .api import HanchuessApiClient
@@ -357,6 +360,13 @@ class HanchuessOptionsFlow(OptionsFlowWithReload):
                         vol.Coerce(int),
                         vol.Range(min=MIN_BATTERY_ONLY_INTERVAL, max=86400),
                     ),
+                    vol.Required(
+                        CONF_ENERGY_INTERVAL,
+                        default=options.get(CONF_ENERGY_INTERVAL, DEFAULT_ENERGY_INTERVAL),
+                    ): vol.All(
+                        vol.Coerce(int),
+                        vol.Range(min=MIN_ENERGY_INTERVAL, max=3600),
+                    ),
                 }),
             )
 
@@ -373,6 +383,12 @@ class HanchuessOptionsFlow(OptionsFlowWithReload):
                 CONF_BATTERY_INTERVAL,
                 default=options.get(CONF_BATTERY_INTERVAL, DEFAULT_BATTERY_INTERVAL),
             ): vol.All(vol.Coerce(int), vol.Range(min=300, max=86400)),
+            vol.Required(
+                CONF_ENERGY_INTERVAL,
+                default=options.get(CONF_ENERGY_INTERVAL, DEFAULT_ENERGY_INTERVAL),
+            ): vol.All(
+                vol.Coerce(int), vol.Range(min=MIN_ENERGY_INTERVAL, max=3600)
+            ),
             vol.Required(
                 CONF_FAST_CHARGE_DURATION,
                 default=options.get(CONF_FAST_CHARGE_DURATION, DEFAULT_FAST_CHARGE_DURATION),

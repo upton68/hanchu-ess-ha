@@ -244,6 +244,8 @@ After setup, open the integration and click **Configure** to adjust:
 - **Realtime poll interval** (default 60 s, minimum 30 s)
 - **Statistics poll interval** (default 5 min / 300 s, minimum 5 min)
 - **Battery poll interval** (default 10 min / 600 s, minimum 5 min)
+- **Battery energy poll interval** (default 5 min / 300 s, minimum 1 min). How
+  often each battery's Charge/Discharge Today and Total sensors are updated
 - **Fast charge/discharge duration** (default 60 min, range 5 min–4 h) — the
   duration applied when the Fast Charge / Fast Discharge switches are turned on
 - **Inverter status schedule poll interval** (default 5 min / 300 s, minimum
@@ -278,6 +280,7 @@ After initial setup, polling intervals and fast charge duration can be adjusted 
 | Realtime poll interval | 60s | 30–3600s | How often live sensor data is refreshed |
 | Statistics poll interval | 300s | 300–86400s | How often daily energy totals are refreshed |
 | Battery poll interval | 600s | 300–86400s | How often per-battery-pack diagnostics sensors are refreshed |
+| Battery energy poll interval | 300s | 60–3600s | How often per-battery Charge/Discharge Today and Total are updated (also on battery-only stations) |
 | Fast charge duration | 60 min | 5–240 min | Default duration when triggering fast charge/discharge |
 | Inverter status schedule poll interval | 300s | 60–3600s | How often the inverter's work mode, slots and SOC limits are read for the Inverter Status sensor |
 
@@ -300,7 +303,7 @@ You get:
   (parallel batteries are listed individually, not as one averaged pack)
 - per battery: SOC, SOH, voltage, current, temperatures, capacity and the
   cell sensors (Max/Min Cell Voltage, Cell Voltage Difference, Cell 1-N
-  Voltage)
+  Voltage), Battery State, and Charge/Discharge Today and Total (see below)
 
 There are no inverter sensors, controls, Inverter Status or Remote Settings
 card in this mode, since the inverter isn't Hanchu's. Battery data is polled
@@ -317,27 +320,43 @@ an issue.
 
 ### Battery charge and discharge energy
 
-The Hanchu cloud doesn't report live charge/discharge energy per battery, so
-the integration doesn't provide these as sensors. You can build them from each
-battery's **Battery Power** sensor with Home Assistant's own helpers, which
-also work in the Energy dashboard. All three helper types are under
-**Settings → Devices & services → Helpers → Create helper**.
+Each battery has four energy sensors, on both normal installs and
+battery-only stations:
 
-1. **Split charging from discharging.** Create two **Template → Template
-   sensor** helpers, unit `W`, device class *Power*, state class *Measurement*
-   (replace the entity ID with your battery's Battery Power sensor):
-   - Charge power: `{{ [states('sensor.hanchuess_battery_xxx_battery_power') | float(0), 0] | max }}`
-   - Discharge power: `{{ [0 - states('sensor.hanchuess_battery_xxx_battery_power') | float(0), 0] | max }}`
-2. **Turn power into energy.** Create an **Integral sensor** for each, with
-   *Left* Riemann method, metric prefix *k* and time unit *Hours*. This gives
-   Charge Energy and Discharge Energy in kWh, always increasing.
-3. **Daily totals (optional).** Create a **Utility Meter** for each Integral
-   sensor with a *Daily* reset cycle.
+| Sensor | Resets | Use |
+|---|---|---|
+| Charge Today | local midnight | daily figure for dashboards |
+| Discharge Today | local midnight | daily figure for dashboards |
+| Charge Total | never | **Energy dashboard** (*Battery systems → Energy going in*) |
+| Discharge Total | never | **Energy dashboard** (*Battery systems → Energy coming out*) |
 
-Accuracy depends on how often the battery is polled: the 60-second default
-for battery-only stations tracks well, while the 10-minute default for
-installs with a Hanchu inverter is coarse (lower it under **Configure** if you
-need these figures).
+There is also a **Battery State** sensor per battery (Idle, Charging or
+Discharging), as the battery itself reports it.
+
+The cloud doesn't report per-battery energy directly, so the integration works
+it out from each battery's minute-by-minute voltage and current
+(the same data behind the battery charts in the Hanchu web console). Every
+**5 minutes** by default (change *Battery energy poll interval* under
+**Configure**, minimum 1 minute) it fetches only the samples since the last
+one it counted, so traffic stays small.
+
+- Totals are saved, so they carry on after a restart. If Home Assistant was
+  down, the missed time is filled in from the cloud's history, up to 3 days
+  back.
+- Gaps of more than 5 minutes in the cloud data (for example when a battery's
+  logger is offline) are skipped rather than guessed.
+- The sensors start counting when you install or upgrade, so Today is partial
+  on the first day and Total starts from zero.
+- Figures are calculated, so expect them to be close to, but not exactly the
+  same as, the Hanchu app. With two or more batteries, their Today figures
+  added together should be close to the station's Battery Charge/Discharge
+  Today.
+
+If you'd rather build your own, you can still turn each battery's **Battery
+Power** sensor into energy with Home Assistant's helpers (Template sensors to
+split charging from discharging, then an **Integral** sensor for each, *Left*
+method, prefix *k*, unit *Hours*). Accuracy then depends on the battery poll
+interval.
 
 ## Inverter Status Sensor
 
