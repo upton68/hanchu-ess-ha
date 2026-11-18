@@ -31,6 +31,9 @@ from .coordinator import (
     HanchuessStatisticsCoordinator,
     HanchuessBatteryCoordinator,
     HanchuessScheduleCoordinator,
+    HanchuessBatteryEnergyCoordinator,
+    HanchuessHistoryCoordinator,
+    energy_store_key,
 )
 from .staging import SettingsStagingBuffer
 
@@ -85,6 +88,9 @@ class HanchuessData:
     # Inverter's own slots/work mode/SOC limits, for the Inverter Status sensor.
     schedule: HanchuessScheduleCoordinator | None = None
     battery_only: bool = False
+    # Per-battery charge/discharge energy from the minute samples.
+    energy: HanchuessBatteryEnergyCoordinator | None = None
+    history: HanchuessHistoryCoordinator | None = None
     # Redacted outline of the station (battery-only), for diagnostics.
     station_summary: dict | None = None
 
@@ -761,6 +767,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
         inverter_device_id=inverter_device.id,
         inverter_model=inverter_model,
         schedule=schedule_coordinator,
+        energy=_start_energy(hass, entry, client, battery_coordinator),
+        history=_start_history(hass, entry, client),
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -793,6 +801,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
         hass.config_entries.async_update_entry(entry, data=new_data)
 
     return True
+
+
+def _start_energy(hass, entry, client, battery_coordinator):
+    """Create the battery energy coordinator and read it in the background.
+
+    The first read after a restart may fetch the day so far for each battery,
+    so it isn't allowed to hold up setup.
+    """
+    if battery_coordinator is None or not entry.data.get("battery_serials"):
+        return None
+    energy = HanchuessBatteryEnergyCoordinator(
+        hass, entry, client, battery_coordinator.dev_ids
+    )
+    entry.async_create_background_task(
+        hass, energy.async_refresh(), "hanchuess battery energy first read"
+    )
+    return energy
+
+
+def _start_history(hass, entry, client):
+    """Create the station energy history coordinator; first read in the background."""
+    history = HanchuessHistoryCoordinator(hass, entry, client)
+    entry.async_create_background_task(
+        hass, history.async_refresh(), "hanchuess energy history first read"
+    )
+    return history
 
 
 async def _async_setup_battery_only(
@@ -845,15 +879,26 @@ async def _async_setup_battery_only(
         inverter_device_id=station_device.id,
         battery_only=True,
         station_summary=summary,
+        energy=_start_energy(hass, entry, client, battery_coordinator),
     )
     await hass.config_entries.async_forward_entry_setups(entry, BATTERY_ONLY_PLATFORMS)
     return True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) -> None:
+    """Delete the saved battery energy totals when the entry is removed."""
+    from homeassistant.helpers.storage import Store
+
+    await Store(hass, 1, energy_store_key(entry.entry_id)).async_remove()
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) -> bool:
     platforms = BATTERY_ONLY_PLATFORMS if is_battery_only(entry) else PLATFORMS
     unloaded = await hass.config_entries.async_unload_platforms(entry, platforms)
     if unloaded:
+        energy = getattr(getattr(entry, "runtime_data", None), "energy", None)
+        if energy is not None:
+            await energy.async_save_now()
         still_loaded = [
             other
             for other in hass.config_entries.async_entries(DOMAIN)

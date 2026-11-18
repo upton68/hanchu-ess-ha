@@ -22,6 +22,15 @@ CONF_SCHEDULE_INTERVAL = "schedule_interval"
 DEFAULT_REALTIME_INTERVAL = 60        # seconds
 DEFAULT_STATISTICS_INTERVAL = 300     # seconds
 DEFAULT_BATTERY_INTERVAL = 600        # seconds
+# Battery charge/discharge energy from the cloud's minute samples.
+CONF_ENERGY_INTERVAL = "energy_interval"
+DEFAULT_ENERGY_INTERVAL = 300         # seconds
+MIN_ENERGY_INTERVAL = 60              # seconds
+CONF_HISTORY_INTERVAL = "history_interval"
+DEFAULT_HISTORY_INTERVAL = 3600       # seconds
+MIN_HISTORY_INTERVAL = 900            # seconds
+# After a long outage, catch up at most this many past days of samples.
+ENERGY_MAX_CATCHUP_DAYS = 3
 # Battery-only stations: the batteries are the only data, so poll faster.
 DEFAULT_BATTERY_ONLY_INTERVAL = 60    # seconds
 MIN_BATTERY_ONLY_INTERVAL = 60        # seconds

@@ -62,6 +62,24 @@ async def async_get_config_entry_diagnostics(
             f"battery_{index}": statuses.get(serial)
             for index, serial in enumerate(serials, start=1)
         }
+    history = getattr(store, "history", None)
+    if history is not None:
+        diag["energy_history"] = {
+            "data": getattr(history, "data", None),
+            "errors": getattr(history, "errors", None),
+        }
+    energy = getattr(store, "energy", None)
+    if energy is not None:
+        energy_data = getattr(energy, "data", None) or {}
+        energy_errors = getattr(energy, "errors", None) or {}
+        serials = entry.data.get("battery_serials", []) or list(energy_data)
+        diag["battery_energy"] = {
+            f"battery_{index}": {
+                "state": energy_data.get(serial),
+                "error": energy_errors.get(serial),
+            }
+            for index, serial in enumerate(serials, start=1)
+        }
 
     diag["device_status"] = async_redact_data(
         getattr(store.realtime, "data", None) or {}, TO_REDACT
