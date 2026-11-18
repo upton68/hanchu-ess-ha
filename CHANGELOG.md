@@ -10,6 +10,14 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.8.0-beta.2] - 2026-11-18
+
+### Fixed
+- PV string sensors showed Unavailable all day if Home Assistant started
+  while the cloud was leaving the string list out (seen overnight on a
+  DC-coupled system). Strings that appear after startup now get their
+  sensors as soon as the cloud reports them, with no restart needed.
+
 ## [2.8.0-beta.1] - 2026-11-17
 
 Beta for testers with DC-coupled solar (PV strings on the Hanchu inverter).
@@ -18,8 +26,9 @@ Beta for testers with DC-coupled solar (PV strings on the Hanchu inverter).
 - **PV string sensors**: Power (W) and Voltage (V) for each PV input the
   inverter reports (PV1, PV2, PV3 on 3-MPPT models), plus Current (A)
   calculated as power ÷ voltage (unknown below 10 V). The cloud reports
-  string power to 0.01 kW, so each string is accurate to about 10 W. Read from the realtime
-  data the integration already polls, so there are no extra cloud calls.
+  string power to 0.01 kW, so each string is accurate to about 10 W. Read
+  from the realtime data the integration already polls, so there are no
+  extra cloud calls.
   Disabled by default on AC-coupled systems.
 
 ### Fixed

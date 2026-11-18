@@ -105,7 +105,7 @@ def test_pv_string_sensors():
     assert _sensor(DAY, "PV1", "power", enabled=False).entity_registry_enabled_default is False
 
 
-async def _setup(realtime_data):
+async def _setup(realtime_data, with_realtime=False):
     realtime = MagicMock()
     realtime.data = realtime_data
     statistics = MagicMock()
@@ -119,7 +119,8 @@ async def _setup(realtime_data):
     )
     added = []
     await sensor_mod.async_setup_entry(MagicMock(), entry, lambda ents: added.extend(ents))
-    return [e for e in added if isinstance(e, PvStringSensor)]
+    sensors = [e for e in added if isinstance(e, PvStringSensor)]
+    return (sensors, realtime, added) if with_realtime else sensors
 
 
 async def test_setup_creates_sensors_per_reported_string():
@@ -153,3 +154,31 @@ def test_translations_have_no_duplicate_keys_and_cover_pv(name):
     sensors = data["entity"]["sensor"]
     for measure in PV_STRING_SENSORS:
         assert "{string}" in sensors[f"pv_string_{measure}"]["name"]
+
+
+
+async def test_strings_missing_at_startup_are_added_when_they_appear():
+    # Overnight the cloud left pvListVo out; HA restarted then.
+    sensors, realtime, added = await _setup({"bypMeterSwitch": 0}, with_realtime=True)
+    assert sensors == []
+    listener = realtime.async_add_listener.call_args.args[0]
+
+    listener()  # still no list: nothing added
+    assert not any(isinstance(e, PvStringSensor) for e in added)
+
+    realtime.data = {**DAY, "bypMeterSwitch": 0}
+    listener()  # morning: the list is back
+    names = {(e._string_name, e._measure) for e in added if isinstance(e, PvStringSensor)}
+    assert names == {(n, m) for n in ("PV1", "PV2", "PV3") for m in PV_STRING_SENSORS}
+    assert all(e.entity_registry_enabled_default for e in added if isinstance(e, PvStringSensor))
+
+    count = len(added)
+    listener()  # same strings again: not added twice
+    assert len(added) == count
+
+
+async def test_strings_present_at_startup_are_not_added_again():
+    sensors, realtime, added = await _setup({**DAY, "bypMeterSwitch": 0}, with_realtime=True)
+    count = len(added)
+    realtime.async_add_listener.call_args.args[0]()
+    assert len(added) == count

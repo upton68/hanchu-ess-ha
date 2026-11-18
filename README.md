@@ -20,7 +20,7 @@ published by Hanchu (Guoxia Technology, the manufacturer) which has had few upda
 - Grid Export Power (W) — export only derived power
 - Load Power (W)
 - PV Power (W)
-- PV string sensors (per PV input the inverter reports, e.g. PV1/PV2/PV3): Power (W) and Voltage (V) from the cloud, plus Current (A) calculated as power ÷ voltage (shown as unknown below 10 V, e.g. at night). The cloud gives string power in kW to two decimal places, so each string is only accurate to about 10 W (a few watts at dusk can read 0 W while PV Power shows them), and the sum of the strings can differ from PV Power by a few tens of watts. Created automatically for the inputs your inverter has; on AC-coupled systems, where the PV inputs are usually unused, they start **disabled**, so enable them if you also have panels on the inverter's own inputs
+- PV string sensors (per PV input the inverter reports, e.g. PV1/PV2/PV3): Power (W) and Voltage (V) from the cloud, plus Current (A) calculated as power ÷ voltage (shown as unknown below 10 V, e.g. at night). The cloud gives string power in kW to two decimal places, so each string is only accurate to about 10 W (a few watts at dusk can read 0 W while PV Power shows them), and the sum of the strings can differ from PV Power by a few tens of watts. Created automatically for the inputs your inverter has (if the cloud leaves them out when Home Assistant starts, for example overnight, they are added as soon as it reports them); on AC-coupled systems, where the PV inputs are usually unused, they start **disabled**, so enable them if you also have panels on the inverter's own inputs
 - AC-Coupled PV Power (W)
 - DG Power (W) — only available when generator support is present
 - Fast Charge Time Remaining (s)

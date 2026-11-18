@@ -16,7 +16,7 @@ from homeassistant.const import (
     UnitOfElectricPotential,
     UnitOfElectricCurrent,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity import DeviceInfo
@@ -539,6 +539,17 @@ def _ac_coupled(realtime_data: dict | None) -> bool:
         return False
 
 
+def _new_pv_string_sensors(realtime, entry, known: set[str]) -> list:
+    """Sensors for PV strings in the realtime data that aren't in known."""
+    pv_enabled = not _ac_coupled(realtime.data)
+    return [
+        PvStringSensor(realtime, entry, string_name, measure, pv_enabled)
+        for string_name in pv_strings(realtime.data)
+        if string_name not in known
+        for measure in PV_STRING_SENSORS
+    ]
+
+
 def battery_power_w(battery_data: dict):
     """Battery power in watts: pack voltage x current.
 
@@ -704,12 +715,22 @@ async def async_setup_entry(
     entities.append(InverterStatusSensor(realtime, entry))
     # One set of sensors per PV string the inverter reports. On AC-coupled
     # systems the inputs are usually unused, so they start disabled there.
-    pv_enabled = not _ac_coupled(realtime.data)
-    for string_name in pv_strings(realtime.data):
-        for measure in PV_STRING_SENSORS:
-            entities.append(
-                PvStringSensor(realtime, entry, string_name, measure, pv_enabled)
-            )
+    # The cloud can leave the string list out (seen overnight), so strings
+    # that turn up after startup are added when they first appear.
+    entities.extend(_new_pv_string_sensors(realtime, entry, set()))
+    known_strings = set(pv_strings(realtime.data))
+
+    @callback
+    def _add_new_pv_strings() -> None:
+        new = _new_pv_string_sensors(realtime, entry, known_strings)
+        if new:
+            known_strings.update(s._string_name for s in new)
+            async_add_entities(new)
+
+    remove = realtime.async_add_listener(_add_new_pv_strings)
+    on_unload = getattr(entry, "async_on_unload", None)
+    if callable(on_unload):
+        on_unload(remove)
     for sensor_key, config in SENSORS.items():
         cond_key = config.get("condition_key")
         if cond_key:
