@@ -31,7 +31,8 @@ Energy figures for the batteries, the PV strings and the whole station.
 - **Battery State** per battery: Idle, Charging or Discharging. (#68)
 - **PV string sensors**: Power (W) and Voltage (V) for each PV input the
   inverter reports (PV1, PV2, PV3 on 3-MPPT models), plus Current (A)
-  calculated as power ÷ voltage (unknown below 10 V). The cloud reports
+  calculated as power ÷ voltage (0 A when the string has no output, e.g.
+  after dark; unknown only if there is output but under 10 V). The cloud reports
   string power to 0.01 kW, so each string is accurate to about 10 W. Read
   from the realtime data the integration already polls, so there are no
   extra cloud calls. Strings the cloud leaves out at startup (seen

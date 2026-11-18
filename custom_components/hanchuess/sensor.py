@@ -496,7 +496,9 @@ def pv_strings(realtime_data: dict | None) -> dict[str, dict]:
         power = parse_quantity(item.get("power"), _POWER_SCALE)
         voltage = parse_quantity(item.get("voltage"), _VOLTAGE_SCALE)
         current = None
-        if power is not None and voltage is not None and voltage >= PV_MIN_VOLTAGE_FOR_CURRENT:
+        if power is not None and power <= 0:
+            current = 0.0  # no output (e.g. after dark): no current, whatever the voltage
+        elif power is not None and voltage is not None and voltage >= PV_MIN_VOLTAGE_FOR_CURRENT:
             current = round(power / voltage, 2)
         strings[name] = {
             "power": None if power is None else round(power, 1),

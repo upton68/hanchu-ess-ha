@@ -66,12 +66,25 @@ def test_pv_strings_daytime():
     assert list(strings) == ["PV1", "PV2", "PV3"]
     assert strings["PV1"] == {"power": 2450.0, "voltage": 385.6, "current": 6.35}
     assert strings["PV2"] == {"power": 850.0, "voltage": 212.4, "current": 4.0}
-    # Below 10 V the current isn't meaningful.
-    assert strings["PV3"]["current"] is None
+    # No output: 0 A, even though the voltage is too low to divide by.
+    assert strings["PV3"]["current"] == 0.0
+
+
+def test_pv_strings_current_unknown_only_when_untrustworthy():
+    # Output reported but almost no voltage: can't work the current out.
+    data = {"pvListVo": [{"name": "PV1", "power": "0.05kW", "voltage": "6.3V"}]}
+    assert pv_strings(data)["PV1"]["current"] is None
+    # Output but no voltage at all.
+    data = {"pvListVo": [{"name": "PV1", "power": "0.05kW"}]}
+    assert pv_strings(data)["PV1"]["current"] is None
+    # Dusk: voltage still up, no output (James's 3-MPPT evening reading).
+    data = {"pvListVo": [{"name": "PV1", "power": "0.00kW", "voltage": "149.5V"}]}
+    assert pv_strings(data)["PV1"]["current"] == 0.0
 
 
 def test_pv_strings_night_and_missing():
-    assert pv_strings(NIGHT)["PV1"] == {"power": 0.0, "voltage": 0.2, "current": None}
+    # After dark (Adam: 6.3 V, 0 W) the current is 0 A, not unknown.
+    assert pv_strings(NIGHT)["PV1"] == {"power": 0.0, "voltage": 0.2, "current": 0.0}
     assert pv_strings({}) == {}
     assert pv_strings(None) == {}
     assert pv_strings({"pvListVo": [{"power": "1kW"}]}) == {}  # no name
