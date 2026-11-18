@@ -18,6 +18,8 @@ from .const import (
     CONF_STATISTICS_INTERVAL,
     CONF_BATTERY_INTERVAL,
     CONF_ENERGY_INTERVAL,
+    CONF_HISTORY_INTERVAL,
+    DEFAULT_HISTORY_INTERVAL,
     DEFAULT_ENERGY_INTERVAL,
     ENERGY_MAX_CATCHUP_DAYS,
     CONF_SCHEDULE_INTERVAL,
@@ -513,6 +515,109 @@ class HanchuessBatteryEnergyCoordinator(DataUpdateCoordinator):
         """Write the totals straight away (on unload, so a reload starts from them)."""
         if self._loaded:
             await self._store.async_save(self._snapshot())
+
+    def _update_entry_token(self, token: str):
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            self.hass.config_entries.async_update_entry(
+                entry, data={**entry.data, "token": token}
+            )
+
+
+# Station energy history fields (console Statistics), kWh.
+HISTORY_FIELDS = {
+    "pv": "pvDge",
+    "load": "loadEe",
+    "grid_import": "gridTdEe",
+    "grid_export": "gridTdFe",
+    "battery_charge": "batTdChg",
+    "battery_discharge": "batTdDschg",
+}
+
+
+def _history_rows(result: dict) -> list | None:
+    """Rows of a historyStaticsChart response, or None if it failed."""
+    if result.get("success") is False or result.get("code") not in (None, 200):
+        return None
+    data = result.get("data")
+    return [r for r in data if isinstance(r, dict)] if isinstance(data, list) else None
+
+
+def _sum_rows(rows: list) -> dict:
+    totals = {}
+    for name, field in HISTORY_FIELDS.items():
+        total = 0.0
+        for row in rows:
+            try:
+                total += float(row.get(field) or 0)
+            except (TypeError, ValueError):
+                continue
+        totals[name] = round(total, 2)
+    return totals
+
+
+class HanchuessHistoryCoordinator(DataUpdateCoordinator):
+    """Station energy for this month, this year and in total (default hourly).
+
+    Uses the web console's Statistics chart (pcs/historyStaticsChart): the
+    year view gives one row per month, the all-years view one row per year.
+    """
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: HanchuessApiClient):
+        super().__init__(
+            hass,
+            _LOGGER,
+            name="hanchuess_history",
+            config_entry=entry,
+            update_interval=timedelta(
+                seconds=entry.options.get(CONF_HISTORY_INTERVAL, DEFAULT_HISTORY_INTERVAL)
+            ),
+        )
+        self.entry = entry
+        self.client = client
+        self.errors: dict[str, str | None] = {}
+
+    async def _fetch(self, date_str: str, language: str) -> list | None:
+        result = await self.client.async_get_station_history(
+            self.entry.data["sn"], date_str, language
+        )
+        if result.get("_token_expired"):
+            raise _TokenExpired
+        rows = _history_rows(result)
+        self.errors[date_str] = None if rows is not None else (
+            f"code={result.get('code')} msg={result.get('msg') or result.get('message')}"
+        )
+        return rows
+
+    async def _async_update_data(self) -> dict:
+        now = dt_util.now()
+        year_key = str(now.year)
+        month_key = f"{now.year}-{now.month:02d}"
+        language = self.hass.config.language or "en"
+        for attempt in range(2):
+            try:
+                year_rows = await self._fetch(year_key, language)
+                all_rows = await self._fetch("0", language)
+                break
+            except _TokenExpired:
+                if attempt == 0 and await _try_refresh(
+                    self.client, self._update_entry_token, force=True
+                ):
+                    continue
+                _raise_auth_failed(self.client, "Token expired and refresh failed")
+        previous = self.data or {}
+        data = {"month_key": month_key, "year_key": year_key}
+        if year_rows is not None:
+            data["month"] = _sum_rows([r for r in year_rows if r.get("date") == month_key])
+            data["year"] = _sum_rows(year_rows)
+        elif previous.get("month_key") == month_key:
+            data["month"], data["year"] = previous.get("month"), previous.get("year")
+        if all_rows is not None:
+            data["lifetime"] = _sum_rows(all_rows)
+        else:
+            data["lifetime"] = previous.get("lifetime")
+        if year_rows is None and all_rows is None and not previous:
+            raise UpdateFailed("Failed to read station energy history")
+        return data
 
     def _update_entry_token(self, token: str):
         for entry in self.hass.config_entries.async_entries(DOMAIN):

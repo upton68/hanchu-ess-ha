@@ -628,6 +628,13 @@ async def async_setup_entry(
         async_add_entities(_battery_entities(entry, battery_coordinator))
         return
     entities.append(DeviceStatusSensor(realtime, entry))
+    history = getattr(entry.runtime_data, "history", None)
+    if history is not None:
+        entities.extend(
+            HistoryEnergySensor(history, entry, period, metric)
+            for period in HISTORY_PERIODS
+            for metric in HISTORY_METRICS
+        )
     entities.append(InverterStatusSensor(realtime, entry))
     for sensor_key, config in SENSORS.items():
         cond_key = config.get("condition_key")
@@ -851,6 +858,43 @@ class BatteryStateSensor(BatterySensor):
         if current < -0.1:
             return "discharging"
         return "idle"
+
+
+# Station energy for this month, this year and in total (console Statistics).
+HISTORY_PERIODS = {"month": "monthly", "year": "yearly", "lifetime": "lifetime"}
+HISTORY_METRICS = {
+    "pv": "mdi:solar-power",
+    "load": "mdi:home-lightning-bolt",
+    "grid_import": "mdi:transmission-tower-import",
+    "grid_export": "mdi:transmission-tower-export",
+    "battery_charge": "mdi:battery-arrow-up",
+    "battery_discharge": "mdi:battery-arrow-down",
+}
+
+
+class HistoryEnergySensor(HanchueSensor):
+    """Station energy for the current month, year or in total, from the cloud."""
+
+    def __init__(self, coordinator, entry, period: str, metric: str):
+        super().__init__(
+            coordinator, entry, f"{HISTORY_PERIODS[period]}_{metric}_energy",
+            {
+                "device_class": SensorDeviceClass.ENERGY,
+                "state_class": SensorStateClass.TOTAL_INCREASING,
+                "unit": UnitOfEnergy.KILO_WATT_HOUR,
+                "icon": HISTORY_METRICS[metric],
+            },
+        )
+        self._period = period
+        self._metric = metric
+        self._attr_suggested_display_precision = 1
+
+    @property
+    def native_value(self):
+        figures = (self.coordinator.data or {}).get(self._period)
+        if not figures:
+            return None
+        return figures.get(self._metric)
 
 
 class BatteryDerivedSensor(BatterySensor):

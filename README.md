@@ -27,6 +27,7 @@ published by Hanchu (Guoxia Technology, the manufacturer) which has had few upda
 - Daily Grid Import/Export (kWh)
 - Daily Load/PV Energy (kWh)
 - Daily DG Energy (kWh) — only available when generator support is present
+- Monthly, Yearly and Lifetime energy (kWh) for PV, Load, Grid Import, Grid Export, Battery Charge and Battery Discharge, straight from the Hanchu cloud's statistics, see [Monthly, yearly and lifetime energy](#monthly-yearly-and-lifetime-energy)
 - Device Status (online/offline/pending)
 - Inverter Status: Fast Charging, Fast Discharging, Scheduled Charge, Scheduled Discharge, Charging, Discharging or Idle, see [Inverter Status Sensor](#inverter-status-sensor)
 - Inverter Model, Rated AC Power (W) and Battery Power Maximum (W), diagnostic, see [Inverter model detection](#inverter-model-detection)
@@ -246,6 +247,8 @@ After setup, open the integration and click **Configure** to adjust:
 - **Battery poll interval** (default 10 min / 600 s, minimum 5 min)
 - **Battery energy poll interval** (default 5 min / 300 s, minimum 1 min). How
   often each battery's Charge/Discharge Today and Total sensors are updated
+- **Energy history poll interval** (default 1 hour / 3600 s, minimum 15 min).
+  How often the Monthly, Yearly and Lifetime energy sensors are updated
 - **Fast charge/discharge duration** (default 60 min, range 5 min–4 h) — the
   duration applied when the Fast Charge / Fast Discharge switches are turned on
 - **Inverter status schedule poll interval** (default 5 min / 300 s, minimum
@@ -280,6 +283,7 @@ After initial setup, polling intervals and fast charge duration can be adjusted 
 | Realtime poll interval | 60s | 30–3600s | How often live sensor data is refreshed |
 | Statistics poll interval | 300s | 300–86400s | How often daily energy totals are refreshed |
 | Battery poll interval | 600s | 300–86400s | How often per-battery-pack diagnostics sensors are refreshed |
+| Energy history poll interval | 3600s | 900–86400s | How often the Monthly, Yearly and Lifetime energy sensors are updated |
 | Battery energy poll interval | 300s | 60–3600s | How often per-battery Charge/Discharge Today and Total are updated (also on battery-only stations) |
 | Fast charge duration | 60 min | 5–240 min | Default duration when triggering fast charge/discharge |
 | Inverter status schedule poll interval | 300s | 60–3600s | How often the inverter's work mode, slots and SOC limits are read for the Inverter Status sensor |
@@ -357,6 +361,29 @@ Power** sensor into energy with Home Assistant's helpers (Template sensors to
 split charging from discharging, then an **Integral** sensor for each, *Left*
 method, prefix *k*, unit *Hours*). Accuracy then depends on the battery poll
 interval.
+
+## Monthly, yearly and lifetime energy
+
+The inverter device has 18 energy sensors taken from the Hanchu cloud's own
+statistics (the Statistics charts in the Hanchu web console and app):
+
+| | PV | Load | Grid Import | Grid Export | Battery Charge | Battery Discharge |
+|---|---|---|---|---|---|---|
+| **Monthly** (resets on the 1st) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Yearly** (resets on 1 January) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Lifetime** (never resets) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+Because the figures come from the cloud, they stay right even if Home
+Assistant was off for a while, so you don't need `utility_meter` helpers built
+from the Daily sensors. The Lifetime sensors suit the Energy dashboard.
+
+- Updated every **hour** by default (change *Energy history poll interval*
+  under **Configure**). Each update is two small requests: this year by month,
+  and all years.
+- Monthly and Yearly can lag the Daily sensors by up to the poll interval.
+- Lifetime only covers what the cloud has recorded since your system was set
+  up on it.
+- Not available on battery-only stations (it needs a Hanchu inverter).
 
 ## Inverter Status Sensor
 

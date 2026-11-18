@@ -286,6 +286,7 @@ async def test_options_flow_sets_options(hass: HomeAssistant):
                 "statistics_interval": 600,
                 "battery_interval": 900,
                 "energy_interval": 120,
+                "history_interval": 7200,
                 "fast_charge_duration": 45,
                 "schedule_interval": 120,
             },
@@ -297,6 +298,7 @@ async def test_options_flow_sets_options(hass: HomeAssistant):
         "statistics_interval": 600,
         "battery_interval": 900,
         "energy_interval": 120,
+        "history_interval": 7200,
         "fast_charge_duration": 45,
         "schedule_interval": 120,
     }
