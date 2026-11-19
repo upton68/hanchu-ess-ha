@@ -10,32 +10,46 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-11-19
+
+Energy figures for the batteries, the PV strings and the whole station.
+
 ### Added
 - **Monthly, Yearly and Lifetime energy** (kWh) for PV, Load, Grid Import,
   Grid Export, Battery Charge and Battery Discharge, on the inverter device.
   Taken from the cloud's own statistics (`pcs/historyStaticsChart`, as the
   web console's Statistics charts use), so they stay right across Home
-  Assistant downtime. Lifetime suits the Energy dashboard. (Discussion #69)
-- **Energy history poll interval** option (default 1 hour, minimum 15
-  minutes).
-- Diagnostics include the energy history figures and any errors.
-
-### Added
+  Assistant downtime and replace `utility_meter` helpers. Lifetime suits the
+  Energy dashboard. Not on battery-only stations. (Discussion #69, #70)
 - **Charge Today, Discharge Today, Charge Total and Discharge Total** (kWh)
   per battery, on normal installs and battery-only stations. Calculated from
   each battery's minute-by-minute voltage and current in the cloud
   (`bmsInfo/powerMinuteChart`), fetched incrementally. Today resets at local
   midnight. Totals are saved across restarts (missed time is filled in, up
   to 3 days) and work in the Energy dashboard. Gaps over 5 minutes are
-  skipped.
-- **Battery State** per battery: Idle, Charging or Discharging.
-- **Battery energy poll interval** option (default 5 minutes, minimum 1
-  minute), on both the normal and battery-only options screens.
-- Diagnostics include each battery's energy state (anonymised).
+  skipped. (#68)
+- **Battery State** per battery: Idle, Charging or Discharging. (#68)
+- **PV string sensors**: Power (W) and Voltage (V) for each PV input the
+  inverter reports (PV1, PV2, PV3 on 3-MPPT models), plus Current (A)
+  calculated as power ÷ voltage (0 A when the string has no output, e.g.
+  after dark; unknown only if there is output but under 10 V). The cloud reports
+  string power to 0.01 kW, so each string is accurate to about 10 W. Read
+  from the realtime data the integration already polls, so there are no
+  extra cloud calls. Strings the cloud leaves out at startup (seen
+  overnight) are added as soon as it reports them. Disabled by default on
+  AC-coupled systems. (#67)
+- Options: **Battery energy poll interval** (default 5 minutes, minimum 1
+  minute, on both the normal and battery-only screens) and **Energy history
+  poll interval** (default 1 hour, minimum 15 minutes).
+- Diagnostics include each battery's energy state (anonymised) and the
+  energy history figures, with any errors.
 
 ### Fixed
 - Battery reads on battery-only stations now refresh the token on a 401 like
   the other endpoints, instead of failing until the next scheduled refresh.
+- Translation files had a duplicate "battery_power" key (inverter and
+  per-battery sensors). Both names were identical, so nothing displayed
+  differently. A test now guards against duplicate keys.
 
 ## [2.7.0] - 2026-11-15
 
