@@ -19,8 +19,8 @@ Options:
   -h, --help                     Show this help
 
 Examples:
-  bash scripts/release.sh --version 1.2.12 --update-changelog true
-  bash scripts/release.sh --version 1.2.12 --update-changelog true --auto-push true
+  bash tools/release.sh --version 1.2.12 --update-changelog true
+  bash tools/release.sh --version 1.2.12 --update-changelog true --auto-push true
 EOF
 }
 
@@ -31,7 +31,9 @@ err() {
 
 parse_bool() {
   local raw="${1:-}"
-  local val="${raw,,}"
+  # tr rather than ${raw,,}: macOS ships bash 3.2, which lacks ${var,,}.
+  local val
+  val="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')"
   case "$val" in
     true|1|yes|y) echo "true" ;;
     false|0|no|n) echo "false" ;;
@@ -115,7 +117,15 @@ CURRENT_MANIFEST_VERSION="$(sed -nE 's/^[[:space:]]*"version"[[:space:]]*:[[:spa
 [[ "$CURRENT_MANIFEST_VERSION" != "$VERSION" ]] || err "manifest already has version $VERSION"
 
 manifest_tmp="$(mktemp)"
-sed -E "0,/\"version\"[[:space:]]*:[[:space:]]*\"[^\"]+\"/s//\"version\": \"${VERSION}\"/" "$MANIFEST_FILE" > "$manifest_tmp"
+# Replace only the first "version" key. awk rather than GNU sed's
+# "0,/re/" address, which macOS (BSD) sed doesn't support.
+awk -v version="$VERSION" '
+  !done && /"version"[[:space:]]*:[[:space:]]*"[^"]+"/ {
+    sub(/"version"[[:space:]]*:[[:space:]]*"[^"]+"/, "\"version\": \"" version "\"")
+    done = 1
+  }
+  { print }
+' "$MANIFEST_FILE" > "$manifest_tmp"
 mv "$manifest_tmp" "$MANIFEST_FILE"
 
 if [[ "$UPDATE_CHANGELOG" == "true" ]]; then

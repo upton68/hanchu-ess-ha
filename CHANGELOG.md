@@ -10,6 +10,11 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Development
+- `tools/release.sh` now runs on macOS (bash 3.2 and BSD sed) as well as
+  Git Bash and Linux.
+- Fixed the CHANGELOG compare links, which still pointed at 2.5.0.
+
 ## [2.8.0] - 2026-11-19
 
 Energy figures for the batteries, the PV strings and the whole station.
@@ -568,7 +573,10 @@ act on it straight away must now call `hanchuess.write_settings` after the write
 - Initial fork of the original integration with read-only battery, grid, PV, and
   load sensors and the custom Lovelace card.
 
-[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.5.0...HEAD
+[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.8.0...HEAD
+[2.8.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.7.0...v2.8.0
+[2.7.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.6.0...v2.7.0
+[2.6.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/upton68/hanchu-ess-ha/compare/v2.3.0...v2.3.1
