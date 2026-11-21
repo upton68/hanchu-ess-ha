@@ -521,3 +521,23 @@ async def test_entities_unavailable_when_both_records_empty(coordinator, cloud):
     await coordinator.async_refresh()
     priority = _entity(HanchuessStrategySelect, coordinator, SELECTS, "strategy_priority")
     assert not priority.available
+
+
+async def test_slot_entities_show_zero_when_record_has_no_windows(coordinator, cloud):
+    """After a Price-mode save in the app, octopuses[] is missing entirely."""
+    del cloud.records[OCTOPUS]["octopuses"]
+    await coordinator.async_refresh()
+    for key in ("octopus_charge_slots_0000_0800", "octopus_charge_slots_1200_1900"):
+        slots = _entity(HanchuessStrategyNumber, coordinator, NUMBERS, key)
+        assert slots.available
+        assert slots.native_value == 0
+
+    slots = _entity(
+        HanchuessStrategyNumber, coordinator, NUMBERS, "octopus_charge_slots_1200_1900"
+    )
+    await slots.async_set_native_value(5)
+    assert slots.native_value == 5
+    with patch(NOTIFY):
+        assert await coordinator.async_save(OCTOPUS)
+    assert cloud.saves[0][1]["octopuses"] == [{"timeStr": "12:00-19:00", "num": 5}]
+    assert slots.native_value == 5  # read back from the new record

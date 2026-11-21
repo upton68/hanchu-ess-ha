@@ -165,8 +165,11 @@ def record_value(record: dict | None, key: str) -> Any:
         item = find_weather_entry(record, band) if band else None
         return item.get("soc") if item else None
     if key.startswith(SLOTS_PREFIX):
+        # The app leaves octopuses[] out when it saves in Price mode. A
+        # missing window reads as 0 slots, so it can still be set from HA
+        # (saving adds the window, see _merge_slots).
         item = find_octopus_window(record, key[len(SLOTS_PREFIX):])
-        return item.get("num") if item else None
+        return item.get("num", 0) if item else 0
     return record.get(key)
 
 

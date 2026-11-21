@@ -317,7 +317,7 @@ can't be saved from Home Assistant: open it in the app and save it once first.
 | Octopus Strategy | switch | |
 | Octopus Schema Type | select | Price settings or Point settings |
 | Octopus Charge / Octopus Discharge | switch | |
-| Octopus Charge Slots 00:00-08:00, 12:00-19:00 | number, 0–10 | Point settings: half-hour slots to charge in each window |
+| Octopus Charge Slots 00:00-08:00, 12:00-19:00 | number, 0–10 | Point settings: half-hour slots to charge in each window. Shows 0 when the app hasn't stored that window (e.g. after a save in Price mode) |
 | Octopus Charge Price / Discharge Price | number, 0–50 p/kWh | Price settings thresholds |
 | Octopus Postcode | text | Octopus won't run without one |
 | Strategy Priority | select | Weather Optimize or Octopus. One setting shared by both screens |
@@ -337,6 +337,16 @@ Each save creates a new record in the Hanchu cloud, so a failed save is never
 repeated automatically. If it fails, the changes stay staged and a notification
 explains why. Changing **Strategy Priority** saves both strategies. The values
 are read again every 5 minutes, so changes made in the app show up too.
+
+The Hanchu app only shows the weather SOCs while Weather Optimize is on. SOC
+changes saved from Home Assistant while it's off are stored, but won't appear
+in the app until it's turned on and the app is refreshed.
+
+> **Moving from a home-made REST setup:** if you previously controlled these
+> strategies with your own REST sensors, scripts or automations, disable them
+> before using these entities. Two writers to the same records can overwrite
+> each other: each save creates a new record from whatever that writer holds,
+> so an older script can undo changes made here, and the other way round.
 
 > **These are cloud-side strategies.** The Hanchu cloud runs them on its own
 > schedule and changes the inverter's settings itself. If you also control the

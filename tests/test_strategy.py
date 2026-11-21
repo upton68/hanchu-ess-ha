@@ -207,6 +207,26 @@ def test_record_value_for_fields_bands_and_windows():
     assert record_value(weather, soc_key("heavy_rain")) is None
     assert record_value(octopus, slots_key("00:00-08:00")) == "4"
     assert record_value(None, "weatherOpen") is None
+    assert record_value(None, slots_key("00:00-08:00")) is None
+
+
+def test_missing_octopus_window_reads_as_zero():
+    """After a Price-mode save in the app the record has no octopuses[]."""
+    record = {k: v for k, v in octopus_record().items() if k != "octopuses"}
+    assert record_value(record, slots_key("00:00-08:00")) == 0
+    assert record_value(record, slots_key("12:00-19:00")) == 0
+    only_morning = {"octopuses": [{"timeStr": "00:00-08:00", "num": "4"}]}
+    assert record_value(only_morning, slots_key("00:00-08:00")) == "4"
+    assert record_value(only_morning, slots_key("12:00-19:00")) == 0
+
+
+def test_setting_a_missing_window_keeps_the_existing_one():
+    record = {"id": 1, "octopuses": [{"timeStr": "00:00-08:00", "num": "4"}]}
+    payload = merge_record(record, {slots_key("12:00-19:00"): 3}, SN)
+    assert payload["octopuses"] == [
+        {"timeStr": "00:00-08:00", "num": "4"},
+        {"timeStr": "12:00-19:00", "num": 3},
+    ]
 
 
 def test_weather_bands_are_unique():
