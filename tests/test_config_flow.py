@@ -729,3 +729,139 @@ async def test_options_flow_energy_interval_minimum(hass: HomeAssistant):
                 "fast_charge_duration": 45, "schedule_interval": 120,
             },
         )
+
+
+# ---------------------------------------------------------------------------
+# Reconfigure: update the password (#72)
+# ---------------------------------------------------------------------------
+
+async def _start_reconfigure(hass, entry):
+    return await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id},
+    )
+
+
+async def test_reconfigure_updates_password_for_entries_on_the_account(hass: HomeAssistant):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"sn": "SN1", "token": "old", "account": "a@x", "password": "old-pw"},
+        unique_id="SN1",
+    )
+    entry.add_to_hass(hass)
+    sibling = MockConfigEntry(
+        domain=DOMAIN,
+        data={"sn": "SN2", "token": "old", "account": "a@x", "password": "old-pw"},
+        unique_id="SN2",
+    )
+    sibling.add_to_hass(hass)
+    other_account = MockConfigEntry(
+        domain=DOMAIN,
+        data={"sn": "SN3", "token": "other", "account": "b@x", "password": "b-pw"},
+        unique_id="SN3",
+    )
+    other_account.add_to_hass(hass)
+    shared = MagicMock()
+    hass.data.setdefault(DOMAIN, {})["_client"] = shared
+
+    patcher, instance = _patched_client(
+        token="new-tok", devices=[{"sn": "SN1", "devType": "2"}, {"sn": "SN2", "devType": "2"}]
+    )
+    try:
+        with patch.object(
+            hass.config_entries, "async_reload", AsyncMock(return_value=True)
+        ) as reload:
+            result = await _start_reconfigure(hass, entry)
+            assert result["type"] == FlowResultType.FORM
+            assert result["step_id"] == "reconfigure"
+            assert list(result["data_schema"].schema) == ["password"]
+            assert result["description_placeholders"] == {"account": "a@x"}
+
+            result2 = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"password": "new-pw"}
+            )
+            await hass.async_block_till_done()
+        assert result2["type"] == FlowResultType.ABORT
+        assert result2["reason"] == "reconfigure_successful"
+        instance.async_login.assert_awaited_once_with("a@x", "new-pw")
+        for updated in (entry, sibling):
+            assert updated.data["password"] == "new-pw"
+            assert updated.data["token"] == "new-tok"
+            assert updated.data["sn"] in ("SN1", "SN2")
+        assert other_account.data["password"] == "b-pw"
+        assert other_account.data["token"] == "other"
+        shared.set_token.assert_called_once_with("new-tok")
+        shared.set_credentials.assert_called_once_with("a@x", "new-pw")
+        assert {c.args[0] for c in reload.await_args_list} == {
+            entry.entry_id, sibling.entry_id,
+        }
+    finally:
+        patcher.stop()
+
+
+async def test_reconfigure_wrong_password_shows_error(hass: HomeAssistant):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"sn": "SN1", "token": "old", "account": "a@x", "password": "old-pw"},
+        unique_id="SN1",
+    )
+    entry.add_to_hass(hass)
+    patcher, instance = _patched_client(token=None)
+    try:
+        result = await _start_reconfigure(hass, entry)
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"password": "bad"}
+        )
+        assert result2["type"] == FlowResultType.FORM
+        assert result2["errors"] == {"base": "auth_failed"}
+        assert entry.data["password"] == "old-pw"
+    finally:
+        patcher.stop()
+
+
+async def test_reconfigure_rejects_account_without_the_inverter(hass: HomeAssistant):
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={"sn": "SN1", "token": "old"}, unique_id="SN1"
+    )
+    entry.add_to_hass(hass)
+    patcher, instance = _patched_client(
+        token="tok", devices=[{"sn": "OTHER", "devType": "2"}]
+    )
+    try:
+        result = await _start_reconfigure(hass, entry)
+        # No stored account (older entry): it is asked for too.
+        assert list(result["data_schema"].schema) == ["account", "password"]
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"account": "z@x", "password": "pw"}
+        )
+        assert result2["type"] == FlowResultType.FORM
+        assert result2["errors"] == {"base": "wrong_account"}
+        assert "password" not in entry.data
+    finally:
+        patcher.stop()
+
+
+async def test_reconfigure_battery_only_checks_station(hass: HomeAssistant):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "mode": "battery_only", "token": "old", "account": "a@x",
+            "password": "old", "stationId": "ST1", "battery_serials": ["B1"],
+        },
+        unique_id="station_ST1",
+    )
+    entry.add_to_hass(hass)
+    patcher, instance = _patched_client(token="tok", stations=[{"stationId": "ST1"}])
+    try:
+        with patch.object(
+            hass.config_entries, "async_reload", AsyncMock(return_value=True)
+        ):
+            result = await _start_reconfigure(hass, entry)
+            result2 = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"password": "new"}
+            )
+            await hass.async_block_till_done()
+        assert result2["reason"] == "reconfigure_successful"
+        assert entry.data["password"] == "new"
+    finally:
+        patcher.stop()

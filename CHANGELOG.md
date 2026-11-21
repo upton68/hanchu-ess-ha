@@ -10,6 +10,28 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Added
+- **Weather Optimize and Octopus (Electricity Price Strategy) settings**, as on
+  the Hanchu app's strategy screens. Weather Optimize: on/off, charge start and
+  end, and the SOC for each of the 11 weather conditions. Octopus: on/off,
+  schema type (Price or Point settings), charge and discharge switches, charge
+  and discharge price thresholds (0–50 p/kWh), the half-hour charge slots for
+  00:00-08:00 and 12:00-19:00 (0–10 each) and the postcode. Plus the Strategy
+  Priority both screens share. All disabled by default; nothing is read from
+  the cloud until one is enabled. Changes are staged and sent with a **Save**
+  button per strategy, which reads the latest settings first, changes only
+  what was staged, and keeps any fields or weather categories it doesn't know.
+  Read every 5 minutes. These run in the Hanchu cloud and can conflict with
+  battery control from Home Assistant if both are used. (#72)
+- **Reconfigure** to change the stored Hanchu password, e.g. after changing it
+  in the app, without waiting for the re-authentication repair. (#72)
+
+### Changed
+- The **Pending Changes** sensor also counts staged Weather Optimize and
+  Octopus changes, with a breakdown in its attributes.
+- Diagnostics include the Weather Optimize and Octopus settings (postcode
+  redacted).
+
 ### Development
 - `tools/release.sh` now runs on macOS (bash 3.2 and BSD sed) as well as
   Git Bash and Linux.

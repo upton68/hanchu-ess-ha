@@ -1236,18 +1236,41 @@ class HanchuessSettingsPendingSensor(SensorEntity):
         inverter_serial_number = entry.data["sn"]
         self._attr_unique_id = f"{inverter_serial_number}_pending_settings_changes"
 
+    def _strategy_buffers(self) -> dict:
+        """Weather Optimize / Octopus buffers, or {} when there are none."""
+        strategy = getattr(self._entry.runtime_data, "strategy", None)
+        staging = getattr(strategy, "staging", None)
+        return staging if isinstance(staging, dict) else {}
+
     async def async_added_to_hass(self) -> None:
-        """Register as the staging buffer's on_change callback."""
+        """Register as the staging buffers' on_change callback."""
         self._entry.runtime_data.staging.set_on_change(self._on_staging_change)
+        for buffer in self._strategy_buffers().values():
+            buffer.set_on_change(self._on_staging_change)
 
     def _on_staging_change(self) -> None:
-        """Called by the staging buffer whenever pending changes."""
+        """Called by a staging buffer whenever pending changes."""
         self.async_write_ha_state()
 
     @property
     def native_value(self) -> int:
-        """Return the number of pending (unwritten) staged settings."""
-        return self._entry.runtime_data.staging.count
+        """Number of staged settings not yet written or saved.
+
+        A staged Strategy priority counts once per record it will be saved to.
+        """
+        return self._entry.runtime_data.staging.count + sum(
+            buffer.count for buffer in self._strategy_buffers().values()
+        )
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        buffers = self._strategy_buffers()
+        attrs = {"inverter_settings": self._entry.runtime_data.staging.count}
+        if "weather" in buffers:
+            attrs["weather_optimize"] = buffers["weather"].count
+        if "octopus" in buffers:
+            attrs["octopus_strategy"] = buffers["octopus"].count
+        return attrs
 
     @property
     def device_info(self) -> DeviceInfo:

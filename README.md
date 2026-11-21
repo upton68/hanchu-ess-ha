@@ -44,6 +44,7 @@ published by Hanchu (Guoxia Technology, the manufacturer) which has had few upda
 - **Discharge Time Slots 1–3** — Start and End times
 - **Fast Charge** switch
 - **Fast Discharge** switch
+- **Weather Optimize** and **Octopus** (Electricity Price Strategy) settings, disabled by default, see [Weather Optimize and Octopus strategies](#weather-optimize-and-octopus-strategies)
 
 ### Settings management
 Changes to all control entities above are **staged locally** and only sent to the
@@ -275,6 +276,15 @@ without needing to be re-added.
 > repair. Completing it once saves your credentials, and from then on the
 > integration recovers on its own.
 
+### Changing your Hanchu password
+
+If you change your password in the Hanchu app, you don't have to wait for the
+repair to appear. Open **Settings → Devices & Services → Hanchuess**, choose
+**Reconfigure** from the device's menu (⋮) and enter the new password. It is
+checked with the Hanchu cloud first, then saved for every Hanchuess device on
+that account, and the devices reload. The account must still own the inverter
+(or battery station) the device was set up for.
+
 ## Configuration Options
 
 After initial setup, polling intervals and fast charge duration can be adjusted via **Settings → Devices & Services → Hanchuess → Configure**:
@@ -288,6 +298,49 @@ After initial setup, polling intervals and fast charge duration can be adjusted 
 | Battery energy poll interval | 300s | 60–3600s | How often per-battery Charge/Discharge Today and Total are updated (also on battery-only stations) |
 | Fast charge duration | 60 min | 5–240 min | Default duration when triggering fast charge/discharge |
 | Inverter status schedule poll interval | 300s | 60–3600s | How often the inverter's work mode, slots and SOC limits are read for the Inverter Status sensor |
+
+## Weather Optimize and Octopus strategies
+
+The Hanchu app and web console have two strategy screens, **Weather Optimize**
+and **Electricity Price Strategy** (Octopus). The integration can read and
+change both. Most people use neither, so all of these entities are **disabled
+by default**, and nothing is read from the cloud until you enable at least one
+of them (Settings → Devices & Services → Hanchuess → entities).
+
+| Entity | Type | Notes |
+|---|---|---|
+| Weather Optimize | switch | |
+| Weather Charge Start / End | time | The end can be on the next day |
+| Weather SOC *condition* (11) | number, 0–100 % | Sunny, Few / Partly / Mostly / Heavy Clouds, Light / Moderate / Heavy Rain, Heavy Snow, Haze/Dust, Other Weather |
+| Octopus Strategy | switch | |
+| Octopus Schema Type | select | Price settings or Point settings |
+| Octopus Charge / Octopus Discharge | switch | |
+| Octopus Charge Slots 00:00-08:00, 12:00-19:00 | number, 0–10 | Point settings: half-hour slots to charge in each window |
+| Octopus Charge Price / Discharge Price | number, 0–50 p/kWh | Price settings thresholds |
+| Octopus Postcode | text | Octopus won't run without one |
+| Strategy Priority | select | Weather Optimize or Octopus. One setting shared by both screens |
+| Save Weather Optimize / Save Octopus Strategy | button | |
+
+Changes are staged, like the other controls, and sent when you press that
+strategy's **Save** button (they are not sent by **Write Settings**, and the
+**Pending Changes** sensor counts them too). Saving:
+
+1. reads the strategy's latest settings from the cloud,
+2. changes only what you staged, sending everything else back as it was
+   (including any weather categories Hanchu adds later, the slot counts while
+   in Price mode and the prices while in Point mode),
+3. saves it once, and reads it back so the entities update straight away.
+
+Each save creates a new record in the Hanchu cloud, so a failed save is never
+repeated automatically. If it fails, the changes stay staged and a notification
+explains why. Changing **Strategy Priority** saves both strategies. The values
+are read again every 5 minutes, so changes made in the app show up too.
+
+> **These are cloud-side strategies.** The Hanchu cloud runs them on its own
+> schedule and changes the inverter's settings itself. If you also control the
+> battery from Home Assistant (Predbat, `hanchuess.device_control`, the Fast
+> Charge/Discharge switches, or automations that write the charge slots), the
+> two can fight each other. Use one or the other.
 
 ## Predbat Integration
 
@@ -434,6 +487,9 @@ instructions, CI checks, and the contribution workflow are documented in
   **staged locally** and only written to the device when you press **Write Settings**
   or call `hanchuess.write_settings`. Existing automations that write these entities
   must be updated to add a `hanchuess.write_settings` call after the write sequence.
+- Weather Optimize and Octopus run in the Hanchu cloud and can conflict with
+  battery control from Home Assistant (Predbat, `device_control`, fast charge) if
+  both are active. See [Weather Optimize and Octopus strategies](#weather-optimize-and-octopus-strategies).
 
 ## Diagnostics
 

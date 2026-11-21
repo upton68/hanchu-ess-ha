@@ -10,6 +10,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from .models import inverter_model_name
 from .const import DOMAIN
 from . import HanchuessConfigEntry
+from .strategy_entity import strategy_times
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -90,6 +91,7 @@ async def async_setup_entry(
         HanchuessTimeSlot(entry, slot_key, config, startup_values)
         for slot_key, config in TIME_SLOTS.items()
     ]
+    entities.extend(strategy_times(entry))
     async_add_entities(entities)
 
 

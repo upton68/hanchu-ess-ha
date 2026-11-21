@@ -8,6 +8,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from .models import inverter_model_name
 from .const import DOMAIN
 from . import HanchuessConfigEntry
+from .strategy_entity import strategy_numbers
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -61,6 +62,7 @@ async def async_setup_entry(
         HanchuessNumber(entry, number_key, config, number_limits, startup_values)
         for number_key, config in NUMBERS.items()
     ]
+    entities.extend(strategy_numbers(entry))
     async_add_entities(entities)
 
 

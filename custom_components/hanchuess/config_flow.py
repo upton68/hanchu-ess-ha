@@ -1,6 +1,5 @@
 """Config flow for Hanchuess."""
 import logging
-import time
 import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
 from homeassistant import config_entries
@@ -298,36 +297,14 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Re-authenticate with user credentials."""
         errors = {}
         if user_input is not None:
-            client = HanchuessApiClient(self.hass, BASE_URL)
-            token = await client.async_login(
-                user_input["account"], user_input["password"]
-            )
+            token = await self._async_login(user_input["account"], user_input["password"])
             if token:
-                # Update token for ALL entries and shared client
-                for entry in self.hass.config_entries.async_entries(DOMAIN):
-                    self.hass.config_entries.async_update_entry(
-                        entry,
-                        data={
-                            **entry.data,
-                            "token": token,
-                            "account": user_input["account"],
-                            "password": user_input["password"],
-                        },
-                    )
-                # Update shared client
-                domain_data = self.hass.data.get(DOMAIN, {})
-                if "_client" in domain_data:
-                    domain_data["_client"]._token = token
-                    domain_data["_client"]._token_time = time.time()
-                    domain_data["_client"]._reauth_triggered = False
-                    domain_data["_client"].set_credentials(
-                        user_input["account"], user_input["password"]
-                    )
-                # Schedule reload for all entries (non-blocking)
-                for entry in self.hass.config_entries.async_entries(DOMAIN):
-                    self.hass.async_create_task(
-                        self.hass.config_entries.async_reload(entry.entry_id)
-                    )
+                self._apply_login(
+                    token,
+                    user_input["account"],
+                    user_input["password"],
+                    self.hass.config_entries.async_entries(DOMAIN),
+                )
                 return self.async_abort(reason="reauth_successful")
             errors["base"] = "auth_failed"
 
@@ -339,6 +316,83 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }),
             errors=errors,
         )
+
+    async def async_step_reconfigure(self, user_input=None):
+        """Update the Hanchu password (e.g. after changing it in the app).
+
+        Uses the same login check as reauth. The account stays the one the
+        entry was set up with; entries created before credentials were stored
+        have none, so they are asked for it as well. The new credentials go to
+        every entry on that account, as they share one login.
+        """
+        entry = self._get_reconfigure_entry()
+        stored_account = entry.data.get("account")
+        errors = {}
+        if user_input is not None:
+            account = stored_account or user_input["account"]
+            password = user_input["password"]
+            client = HanchuessApiClient(self.hass, BASE_URL)
+            token = await client.async_login(account, password)
+            if not token:
+                errors["base"] = "auth_failed"
+            elif not await self._account_owns_entry(client, entry):
+                errors["base"] = "wrong_account"
+            else:
+                entries = [
+                    other
+                    for other in self.hass.config_entries.async_entries(DOMAIN)
+                    if other.entry_id == entry.entry_id
+                    or other.data.get("account") in (None, "", account)
+                ]
+                self._apply_login(token, account, password, entries)
+                return self.async_abort(reason="reconfigure_successful")
+
+        schema = {} if stored_account else {vol.Required("account"): str}
+        schema[vol.Required("password")] = str
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(schema),
+            errors=errors,
+            description_placeholders={"account": stored_account or ""},
+        )
+
+    async def _async_login(self, account: str, password: str) -> str | None:
+        client = HanchuessApiClient(self.hass, BASE_URL)
+        return await client.async_login(account, password)
+
+    async def _account_owns_entry(self, client, entry) -> bool:
+        """Whether the logged-in account has this entry's inverter or station."""
+        if entry.data.get("mode") == MODE_BATTERY_ONLY:
+            language = self.hass.config.language or "en"
+            stations = await client.async_get_stations(language)
+            return any(
+                str(station.get("stationId")) == str(entry.data.get("stationId"))
+                for station in stations
+            )
+        devices = await client.async_get_devices()
+        return any(device.get("sn") == entry.data.get("sn") for device in devices)
+
+    def _apply_login(self, token: str, account: str, password: str, entries) -> None:
+        """Store a new token and credentials, then reload the entries."""
+        for entry in entries:
+            self.hass.config_entries.async_update_entry(
+                entry,
+                data={
+                    **entry.data,
+                    "token": token,
+                    "account": account,
+                    "password": password,
+                },
+            )
+        shared_client = self.hass.data.get(DOMAIN, {}).get("_client")
+        if shared_client is not None:
+            shared_client.set_token(token)
+            shared_client.set_credentials(account, password)
+        # Schedule reload for the entries (non-blocking)
+        for entry in entries:
+            self.hass.async_create_task(
+                self.hass.config_entries.async_reload(entry.entry_id)
+            )
 
 
 class HanchuessOptionsFlow(OptionsFlowWithReload):
