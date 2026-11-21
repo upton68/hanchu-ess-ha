@@ -349,7 +349,7 @@ bash tools/restore-ha.sh \
   --restore-from "/c/Projects/hanchu-ess-ha/.ha-deploy-backups/20260703-230000"
 ```
 
-## Automated release script for maintainers with permission only (Git Bash)
+## Automated release script for maintainers with permission only (Git Bash, macOS or Linux)
 
 You can run the release flow with:
 
