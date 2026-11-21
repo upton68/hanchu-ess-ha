@@ -14,14 +14,18 @@ later versions are tracked here going forward.
 - **Weather Optimize and Octopus (Electricity Price Strategy) settings**, as on
   the Hanchu app's strategy screens. Weather Optimize: on/off, charge start and
   end, and the SOC for each of the 11 weather conditions. Octopus: on/off,
-  schema type (Price or Point settings), charge and discharge switches, charge
-  and discharge price thresholds (0–50 p/kWh), the half-hour charge slots for
+  schema type (Price or Point settings), the two enable switches **Octopus
+  Switch 00:00-08:00 / Charge Price** and **Octopus Switch 12:00-19:00 /
+  Discharge Price** (the windows in Point settings, the price strategies in
+  Price settings, with an `applies_to` attribute saying which), charge and
+  discharge price thresholds (0–50 p/kWh), the half-hour charge slots for
   00:00-08:00 and 12:00-19:00 (0–10 each) and the postcode. Plus the Strategy
   Priority both screens share. All disabled by default; nothing is read from
   the cloud until one is enabled. Changes are staged and sent with a **Save**
   button per strategy, which reads the latest settings first, changes only
   what was staged, and keeps any fields or weather categories it doesn't know.
-  Read every 5 minutes. A charge-slot window the record doesn't include
+  Read every 5 minutes. As in the app, Octopus changes saved before 22:00
+  apply from the next day, after 22:00 from the day after. A charge-slot window the record doesn't include
   (the app leaves them out when saving in Price mode) shows 0 and can still
   be set. A strategy never saved in the app stays unavailable
   and is not saved from Home Assistant. These run in the Hanchu cloud and can

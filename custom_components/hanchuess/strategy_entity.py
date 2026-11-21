@@ -64,6 +64,9 @@ class StrategyField:
     step: float = 1
     unit: str | None = None
     options: dict[str, str] | None = None
+    # Switches whose meaning depends on the Octopus Schema Type: type code
+    # ("1" Price, "2" Point settings) -> what the switch turns on in it.
+    applies_to: dict[str, str] | None = None
 
 
 SWITCHES = (
@@ -71,11 +74,23 @@ SWITCHES = (
                   (WEATHER,), "weatherOpen"),
     StrategyField("octopus_strategy", "Octopus Strategy", "mdi:cash-clock",
                   (OCTOPUS,), "octopusOpen"),
-    StrategyField("octopus_charge", "Octopus Charge", "mdi:battery-charging",
-                  (OCTOPUS,), "octopusPriceEnable"),
-    StrategyField("octopus_discharge", "Octopus Discharge", "mdi:battery-arrow-down",
-                  (OCTOPUS,), "octopusDischargeEnable"),
+    # The same two fields switch the windows in Point settings and the price
+    # strategies in Price settings; the unique ids keep their original keys.
+    StrategyField("octopus_charge", "Octopus Switch 00:00-08:00 / Charge Price",
+                  "mdi:battery-charging", (OCTOPUS,), "octopusPriceEnable",
+                  applies_to={
+                      OCTOPUS_TYPES["Point settings"]: "Charge slots 00:00-08:00",
+                      OCTOPUS_TYPES["Price settings"]: "Charging Price strategy",
+                  }),
+    StrategyField("octopus_discharge", "Octopus Switch 12:00-19:00 / Discharge Price",
+                  "mdi:toggle-switch-outline", (OCTOPUS,), "octopusDischargeEnable",
+                  applies_to={
+                      OCTOPUS_TYPES["Point settings"]: "Charge slots 12:00-19:00",
+                      OCTOPUS_TYPES["Price settings"]: "Discharge Price strategy",
+                  }),
 )
+
+OCTOPUS_TYPE_FIELD = "octopusType"
 
 TIMES = (
     StrategyField("weather_charge_start", "Weather Charge Start", "mdi:clock-start",
@@ -111,7 +126,7 @@ NUMBERS = (
 
 SELECTS = (
     StrategyField("octopus_schema_type", "Octopus Schema Type", "mdi:format-list-bulleted-type",
-                  (OCTOPUS,), "octopusType", options=OCTOPUS_TYPES),
+                  (OCTOPUS,), OCTOPUS_TYPE_FIELD, options=OCTOPUS_TYPES),
     StrategyField("strategy_priority", "Strategy Priority", "mdi:priority-high",
                   (WEATHER, OCTOPUS), PRIORITY_KEY, options=PRIORITY_OPTIONS),
 )
@@ -169,12 +184,15 @@ class HanchuessStrategyEntity(CoordinatorEntity):
     @property
     def raw_value(self) -> Any:
         """The staged value if there is one, else the latest record's."""
+        return self._value_of(self._spec.field)
+
+    def _value_of(self, field: str) -> Any:
         for kind in self._spec.kinds:
             pending = self.coordinator.staging[kind].pending
-            if self._spec.field in pending:
-                return pending[self._spec.field]
+            if field in pending:
+                return pending[field]
         for kind in self._spec.kinds:
-            value = record_value(self.coordinator.record(kind), self._spec.field)
+            value = record_value(self.coordinator.record(kind), field)
             if value is not None:
                 return value
         return None
@@ -190,6 +208,19 @@ class HanchuessStrategySwitch(HanchuessStrategyEntity, SwitchEntity):
     @property
     def is_on(self) -> bool | None:
         return decode_flag(self.raw_value)
+
+    @property
+    def extra_state_attributes(self) -> dict | None:
+        """``applies_to``: what the switch controls in the current schema type.
+
+        Follows the Octopus Schema Type as shown (staged or saved); left out
+        while the type is unknown.
+        """
+        if not self._spec.applies_to:
+            return None
+        schema_type = self._value_of(OCTOPUS_TYPE_FIELD)
+        meaning = self._spec.applies_to.get(str(schema_type).strip()) if schema_type is not None else None
+        return {"applies_to": meaning} if meaning else None
 
     async def async_turn_on(self, **kwargs) -> None:
         self._stage("1")

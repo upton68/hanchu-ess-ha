@@ -316,12 +316,25 @@ can't be saved from Home Assistant: open it in the app and save it once first.
 | Weather SOC *condition* (11) | number, 0–100 % | Sunny, Few / Partly / Mostly / Heavy Clouds, Light / Moderate / Heavy Rain, Heavy Snow, Haze/Dust, Other Weather |
 | Octopus Strategy | switch | |
 | Octopus Schema Type | select | Price settings or Point settings |
-| Octopus Charge / Octopus Discharge | switch | |
+| Octopus Switch 00:00-08:00 / Charge Price | switch | Point settings: the 00:00-08:00 charge window on/off. Price settings: the Charging Price strategy on/off |
+| Octopus Switch 12:00-19:00 / Discharge Price | switch | Point settings: the 12:00-19:00 charge window on/off. Price settings: the Discharge Price strategy on/off |
 | Octopus Charge Slots 00:00-08:00, 12:00-19:00 | number, 0–10 | Point settings: half-hour slots to charge in each window. Shows 0 when the app hasn't stored that window (e.g. after a save in Price mode) |
 | Octopus Charge Price / Discharge Price | number, 0–50 p/kWh | Price settings thresholds |
 | Octopus Postcode | text | Octopus won't run without one |
 | Strategy Priority | select | Weather Optimize or Octopus. One setting shared by both screens |
 | Save Weather Optimize / Save Octopus Strategy | button | |
+
+The two Octopus switches are the same two settings in both schema types, so
+their meaning depends on the type: in Point settings they switch the two
+windows, and in Price settings the two price strategies. Both Point-settings
+windows are charge windows; there is no discharge in Point settings. Each
+switch has an `applies_to` attribute saying what it controls in the current
+schema type.
+
+Octopus settings don't take effect straight away. As the app explains,
+settings saved before 22:00 apply from the next day (00:00-23:59), and settings
+saved after 22:00 apply from the day after tomorrow. That's the same for a save
+from Home Assistant.
 
 Changes are staged, like the other controls, and sent when you press that
 strategy's **Save** button (they are not sent by **Write Settings**, and the

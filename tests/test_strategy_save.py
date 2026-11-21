@@ -541,3 +541,66 @@ async def test_slot_entities_show_zero_when_record_has_no_windows(coordinator, c
         assert await coordinator.async_save(OCTOPUS)
     assert cloud.saves[0][1]["octopuses"] == [{"timeStr": "12:00-19:00", "num": 5}]
     assert slots.native_value == 5  # read back from the new record
+
+
+# ---------------------------------------------------------------------------
+# Octopus enable switches: names and applies_to
+# ---------------------------------------------------------------------------
+
+def test_octopus_switch_names_and_unique_ids():
+    by_field = {spec.field: spec for spec in SWITCHES}
+    first = by_field["octopusPriceEnable"]
+    second = by_field["octopusDischargeEnable"]
+    assert first.name == "Octopus Switch 00:00-08:00 / Charge Price"
+    assert second.name == "Octopus Switch 12:00-19:00 / Discharge Price"
+    assert (first.key, second.key) == ("octopus_charge", "octopus_discharge")
+    assert second.icon != "mdi:battery-arrow-down"
+
+
+def _octopus_switches(coordinator):
+    return (
+        _entity(HanchuessStrategySwitch, coordinator, SWITCHES, "octopus_charge"),
+        _entity(HanchuessStrategySwitch, coordinator, SWITCHES, "octopus_discharge"),
+    )
+
+
+async def test_applies_to_in_price_settings(coordinator, cloud):
+    cloud.records[OCTOPUS]["octopusType"] = "1"
+    await coordinator.async_refresh()
+    first, second = _octopus_switches(coordinator)
+    assert first.extra_state_attributes == {"applies_to": "Charging Price strategy"}
+    assert second.extra_state_attributes == {"applies_to": "Discharge Price strategy"}
+
+
+async def test_applies_to_in_point_settings(coordinator, cloud):
+    cloud.records[OCTOPUS]["octopusType"] = 2  # numeric in the record
+    await coordinator.async_refresh()
+    first, second = _octopus_switches(coordinator)
+    assert first.extra_state_attributes == {"applies_to": "Charge slots 00:00-08:00"}
+    assert second.extra_state_attributes == {"applies_to": "Charge slots 12:00-19:00"}
+
+
+async def test_applies_to_follows_staged_schema_type(coordinator, cloud):
+    await coordinator.async_refresh()  # record is Price settings
+    schema = _entity(HanchuessStrategySelect, coordinator, SELECTS, "octopus_schema_type")
+    await schema.async_select_option("Point settings")
+    first, _ = _octopus_switches(coordinator)
+    assert first.extra_state_attributes == {"applies_to": "Charge slots 00:00-08:00"}
+
+
+async def test_applies_to_omitted_when_schema_type_unknown(coordinator, cloud):
+    del cloud.records[OCTOPUS]["octopusType"]
+    await coordinator.async_refresh()
+    first, second = _octopus_switches(coordinator)
+    assert first.extra_state_attributes is None
+    assert second.extra_state_attributes is None
+    cloud.records[OCTOPUS]["octopusType"] = "9"
+    await coordinator.async_refresh()
+    assert first.extra_state_attributes is None
+
+
+async def test_other_switches_have_no_applies_to(coordinator):
+    await coordinator.async_refresh()
+    for key in ("weather_optimize", "octopus_strategy"):
+        switch = _entity(HanchuessStrategySwitch, coordinator, SWITCHES, key)
+        assert switch.extra_state_attributes is None
