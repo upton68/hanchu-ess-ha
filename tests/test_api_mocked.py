@@ -483,7 +483,7 @@ def _sent(m, url):
 
 
 @pytest.mark.parametrize("kind,url", [("weather", WEATHER_READ), ("octopus", OCTOPUS_READ)])
-async def test_get_strategy_sends_encrypted_sn(hass, kind, url):
+async def test_get_strategy_sends_encrypted_pcs_id(hass, kind, url):
     client = HanchuessApiClient(hass, BASE_URL, token="t")
     record = {"id": 27482, "sn": "SN1"}
     with aioresponses() as m:
@@ -492,7 +492,7 @@ async def test_get_strategy_sends_encrypted_sn(hass, kind, url):
         sent = _sent(m, url)
     assert result["data"] == record
     body, headers = sent[0]
-    assert body == {"sn": "SN1"}
+    assert body == {"pcsId": "SN1"}  # reads use pcsId; saves use sn
     assert headers["access-token"] == "t"
     assert "Content-Type" not in headers  # text/plain body, as the console sends
 
@@ -515,6 +515,7 @@ async def test_save_strategy_posts_full_record(hass, kind, url):
         sent = _sent(m, url)
     assert result["success"] is True
     assert sent[0][0] == record
+    assert "pcsId" not in sent[0][0]
 
 
 async def test_save_strategy_is_sent_once_on_failure(hass):

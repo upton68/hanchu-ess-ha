@@ -20,6 +20,7 @@ from .strategy import (
     PRIORITY_KEY,
     WEATHER,
     changes_applied,
+    has_settings,
     merge_record,
     save_succeeded,
     strategy_record,
@@ -750,6 +751,12 @@ class HanchuessStrategyCoordinator(DataUpdateCoordinator):
         latest = await self._read_latest(kind)
         if latest is None:
             return False, f"Could not read the current settings ({self.errors.get(kind)})"
+        if not has_settings(latest):
+            # Never build a record from scratch: save it once in the app first.
+            return False, (
+                "No existing settings found. Open this strategy in the Hanchu "
+                "app and save it once, then try again."
+            )
         payload = merge_record(latest, staged, self._sn)
         language = self._language()
         _LOGGER.info(

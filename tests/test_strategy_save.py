@@ -459,3 +459,65 @@ async def _setup_and_check(hass, entry, client):
     assert client.async_get_strategy.await_count == 2  # weather + octopus, once
 
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+# ---------------------------------------------------------------------------
+# Never save from an empty record
+# ---------------------------------------------------------------------------
+
+async def test_save_refused_when_no_existing_settings(coordinator, cloud):
+    cloud.records[OCTOPUS] = None  # read: success, data null (never saved in the app)
+    await coordinator.async_refresh()
+    assert coordinator.record(OCTOPUS) == {}
+    coordinator.staging[OCTOPUS].stage("octopusOpen", "1")
+
+    with patch(NOTIFY) as notify:
+        assert not await coordinator.async_save(OCTOPUS)
+
+    assert cloud.saves == []
+    assert coordinator.staging[OCTOPUS].pending == {"octopusOpen": "1"}
+    assert "No existing settings found" in notify.async_create.call_args.args[1]
+
+
+async def test_save_refused_when_record_has_no_id(coordinator, cloud):
+    cloud.records[WEATHER] = {"weatherOpen": "0"}
+    await coordinator.async_refresh()
+    coordinator.staging[WEATHER].stage("weatherOpen", "1")
+    with patch(NOTIFY):
+        assert not await coordinator.async_save(WEATHER)
+    assert cloud.saves == []
+
+
+async def test_priority_not_saved_to_a_strategy_without_settings(coordinator, cloud):
+    cloud.records[OCTOPUS] = None
+    await coordinator.async_refresh()
+    for kind in (WEATHER, OCTOPUS):
+        coordinator.staging[kind].stage(PRIORITY_KEY, "1")
+    with patch(NOTIFY):
+        assert not await coordinator.async_save(WEATHER)
+    assert [kind for kind, _ in cloud.saves] == [WEATHER]
+    assert coordinator.staging[OCTOPUS].pending == {PRIORITY_KEY: "1"}
+
+
+async def test_entities_unavailable_when_record_empty(coordinator, cloud):
+    cloud.records[OCTOPUS] = None
+    await coordinator.async_refresh()
+    octopus = _entity(HanchuessStrategySwitch, coordinator, SWITCHES, "octopus_strategy")
+    weather = _entity(HanchuessStrategySwitch, coordinator, SWITCHES, "weather_optimize")
+    priority = _entity(HanchuessStrategySelect, coordinator, SELECTS, "strategy_priority")
+    button = HanchuessStrategySaveButton(
+        coordinator, coordinator.config_entry, OCTOPUS, "save_octopus_strategy",
+        "Save Octopus Strategy",
+    )
+    assert not octopus.available
+    assert not button.available
+    assert weather.available
+    assert priority.available  # still in the Weather record
+
+
+async def test_entities_unavailable_when_both_records_empty(coordinator, cloud):
+    cloud.records[WEATHER] = None
+    cloud.records[OCTOPUS] = None
+    await coordinator.async_refresh()
+    priority = _entity(HanchuessStrategySelect, coordinator, SELECTS, "strategy_priority")
+    assert not priority.available

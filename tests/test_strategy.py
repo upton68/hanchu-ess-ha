@@ -228,3 +228,14 @@ def test_decoders():
     assert decode_option("2", OCTOPUS_TYPES) == "Point settings"
     assert decode_option(1, OCTOPUS_TYPES) == "Price settings"
     assert decode_option("9", OCTOPUS_TYPES) is None
+
+
+def test_has_settings():
+    from custom_components.hanchuess.strategy import has_settings
+
+    assert has_settings({"id": 27482})
+    assert has_settings({"id": "27482"})
+    assert not has_settings({})
+    assert not has_settings({"id": None, "weatherOpen": "1"})
+    assert not has_settings({"id": ""})
+    assert not has_settings(None)

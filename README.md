@@ -305,7 +305,9 @@ The Hanchu app and web console have two strategy screens, **Weather Optimize**
 and **Electricity Price Strategy** (Octopus). The integration can read and
 change both. Most people use neither, so all of these entities are **disabled
 by default**, and nothing is read from the cloud until you enable at least one
-of them (Settings → Devices & Services → Hanchuess → entities).
+of them (Settings → Devices & Services → Hanchuess → entities). If a strategy
+has never been saved in the Hanchu app, its entities stay unavailable and it
+can't be saved from Home Assistant: open it in the app and save it once first.
 
 | Entity | Type | Notes |
 |---|---|---|

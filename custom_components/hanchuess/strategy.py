@@ -90,6 +90,16 @@ def strategy_record(result: Any) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+def has_settings(record: Any) -> bool:
+    """Whether a record holds saved settings (it has an ``id``).
+
+    A strategy that has never been saved reads back empty. Its entities are
+    unavailable and it is never saved from, since the server would get a
+    record made up only of the staged fields.
+    """
+    return isinstance(record, dict) and record.get("id") not in (None, "")
+
+
 def save_succeeded(result: Any) -> bool:
     return isinstance(result, dict) and bool(
         result.get("success") or result.get("code") == 200

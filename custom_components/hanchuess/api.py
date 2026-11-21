@@ -344,10 +344,11 @@ class HanchuessApiClient:
         """Read the latest Weather Optimize or Octopus record (``kind``).
 
         The record is in ``data`` of the response; {"_token_expired": True}
-        on a 401, {} if the request failed.
+        on a 401, {} if the request failed. The read identifies the inverter
+        as ``pcsId`` (saves use ``sn``), as the web console sends it.
         """
         read_path, _ = STRATEGY_PATHS[kind]
-        payload = _encrypt_payload({"sn": sn})
+        payload = _encrypt_payload({"pcsId": sn})
         return await self._console_post(read_path, payload, language)
 
     async def async_save_strategy(self, kind: str, record: dict, language: str = "en") -> dict:

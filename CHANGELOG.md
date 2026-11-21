@@ -21,8 +21,9 @@ later versions are tracked here going forward.
   the cloud until one is enabled. Changes are staged and sent with a **Save**
   button per strategy, which reads the latest settings first, changes only
   what was staged, and keeps any fields or weather categories it doesn't know.
-  Read every 5 minutes. These run in the Hanchu cloud and can conflict with
-  battery control from Home Assistant if both are used. (#72)
+  Read every 5 minutes. A strategy never saved in the app stays unavailable
+  and is not saved from Home Assistant. These run in the Hanchu cloud and can
+  conflict with battery control from Home Assistant if both are used. (#72)
 - **Reconfigure** to change the stored Hanchu password, e.g. after changing it
   in the app, without waiting for the re-authentication repair. (#72)
 

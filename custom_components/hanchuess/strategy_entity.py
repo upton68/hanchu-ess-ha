@@ -39,6 +39,7 @@ from .strategy import (
     decode_number,
     decode_option,
     encode_hhmm,
+    has_settings,
     record_value,
     slots_key,
     soc_key,
@@ -162,7 +163,8 @@ class HanchuessStrategyEntity(CoordinatorEntity):
 
     @property
     def available(self) -> bool:
-        return any(self.coordinator.record(kind) is not None for kind in self._spec.kinds)
+        """Unavailable until a record with saved settings has been read."""
+        return any(has_settings(self.coordinator.record(kind)) for kind in self._spec.kinds)
 
     @property
     def raw_value(self) -> Any:
