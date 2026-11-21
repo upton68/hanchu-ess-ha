@@ -11,6 +11,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .models import inverter_model_name
 from .const import DOMAIN
 from . import HanchuessConfigEntry
+from .strategy_entity import strategy_buttons
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,6 +61,7 @@ async def async_setup_entry(
     async_add_entities([
         HanchuessReadSettingsButton(hass, entry),
         HanchuessWriteSettingsButton(hass, entry),
+        *strategy_buttons(entry),
     ])
 
 

@@ -10,6 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .models import inverter_model_name
 from .const import DOMAIN
 from . import HanchuessConfigEntry
+from .strategy_entity import strategy_selects
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ async def async_setup_entry(
 ):
     data = entry.runtime_data
     startup_values = data.startup_values
-    async_add_entities([WorkModeSelect(entry, startup_values)])
+    async_add_entities([WorkModeSelect(entry, startup_values), *strategy_selects(entry)])
 
 
 def _decode_work_mode(raw) -> str | None:

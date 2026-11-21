@@ -232,3 +232,33 @@ async def test_battery_energy_section_is_anonymised():
         "battery_2": {"state": None, "error": "code=500 msg=x"},
     }
     assert "BAT-1" not in str(diag["battery_energy"])
+
+
+async def test_strategy_records_included_with_postcode_redacted():
+    from custom_components.hanchuess.staging import SettingsStagingBuffer
+
+    staging = {"weather": SettingsStagingBuffer(), "octopus": SettingsStagingBuffer()}
+    staging["octopus"].stage("octopusPrice", 9.5)
+    strategy = SimpleNamespace(
+        data={
+            "weather": {"id": 1, "sn": "SN123", "weatherOpen": "1"},
+            "octopus": {"id": 2, "sn": "SN123", "postalCode": "AB1 2CD", "octopusOpen": "0"},
+        },
+        errors={"weather": None, "octopus": "code=100 msg=x"},
+        staging=staging,
+    )
+    entry = _FakeEntry()
+    entry.runtime_data = _make_runtime_data(strategy=strategy)
+
+    diag = await async_get_config_entry_diagnostics(MagicMock(), entry)
+
+    assert diag["strategy"]["weather"] == {
+        "record": {"id": 1, "sn": REDACTED, "weatherOpen": "1"},
+        "error": None,
+        "pending": [],
+    }
+    octopus = diag["strategy"]["octopus"]
+    assert octopus["record"]["postalCode"] == REDACTED
+    assert octopus["record"]["octopusOpen"] == "0"
+    assert octopus["error"] == "code=100 msg=x"
+    assert octopus["pending"] == ["octopusPrice"]

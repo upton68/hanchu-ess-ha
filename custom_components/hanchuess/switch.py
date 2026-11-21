@@ -7,6 +7,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from .models import inverter_model_name
 from .const import DOMAIN, CONF_FAST_CHARGE_DURATION, DEFAULT_FAST_CHARGE_DURATION
 from . import HanchuessConfigEntry
+from .strategy_entity import strategy_switches
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ async def async_setup_entry(
     async_add_entities([
         FastChargeSwitch(client, entry),
         FastDischargeSwitch(client, entry),
+        *strategy_switches(entry),
     ])
 
 

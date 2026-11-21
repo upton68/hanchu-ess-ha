@@ -121,7 +121,8 @@ rules:
   icon-translations:
     status: todo
   reconfiguration-flow:
-    status: todo
+    status: done
+    comment: Reconfigure updates the Hanchu password, reusing the reauth login check.
   repair-issues:
     status: done
     comment: Token refresh failure raises a HA repair (reauth) flow.

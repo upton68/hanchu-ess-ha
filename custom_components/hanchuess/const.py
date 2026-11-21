@@ -2,7 +2,7 @@
 import os
 
 DOMAIN = "hanchuess"
-PLATFORMS = ["sensor", "number", "switch", "select", "time", "button"]
+PLATFORMS = ["sensor", "number", "switch", "select", "time", "button", "text"]
 # Hanchu batteries with a third-party inverter: battery sensors only.
 BATTERY_ONLY_PLATFORMS = ["sensor"]
 MODE_BATTERY_ONLY = "battery_only"
@@ -37,6 +37,8 @@ MIN_BATTERY_ONLY_INTERVAL = 60        # seconds
 DEFAULT_FAST_CHARGE_DURATION = 60     # minutes
 DEFAULT_SCHEDULE_INTERVAL = 300       # seconds
 MIN_SCHEDULE_INTERVAL = 60            # seconds
+# Weather Optimize and Octopus strategy records (cloud-side, change rarely).
+STRATEGY_INTERVAL = 300               # seconds
 
 # Inverter settings polled for the Inverter Status sensor (work mode, the SOC
 # limits that stop a scheduled charge/discharge, and the six slots).

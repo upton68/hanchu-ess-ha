@@ -28,10 +28,19 @@
           "account": "Account",
           "password": "Password"
         }
+      },
+      "reconfigure": {
+        "title": "Update Hanchuess password",
+        "description": "Enter your new Hanchu password, for example after changing it in the Hanchu app. Account: {account}",
+        "data": {
+          "account": "Account",
+          "password": "Password"
+        }
       }
     },
     "error": {
       "auth_failed": "Authentication failed, please check your credentials",
+      "wrong_account": "This account does not have the inverter or station this entry was set up for",
       "cannot_connect": "Cannot connect to server",
       "no_devices": "No Hanchu inverters or batteries found under this account",
       "station_lookup_failed": "Could not load station details",
@@ -39,7 +48,8 @@
     },
     "abort": {
       "already_configured": "This device is already configured",
-      "reauth_successful": "Re-authentication successful"
+      "reauth_successful": "Re-authentication successful",
+      "reconfigure_successful": "Password updated"
     }
   },
   "options": {

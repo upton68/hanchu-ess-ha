@@ -12,6 +12,17 @@ from .crypto import _encrypt_payload
 MINUTE_CHART_MAX_COUNT = 1440
 # Station energy history (the console's Statistics charts).
 STATION_HISTORY_PATH = "/gateway/platform/pcs/historyStaticsChart"
+# Weather Optimize and Octopus strategies (issue #72): read path, save path.
+STRATEGY_PATHS = {
+    "weather": (
+        "/gateway/platform/weather/queryWeatherAndOctopus",
+        "/gateway/platform/iessWeather/add",
+    ),
+    "octopus": (
+        "/gateway/platform/weather/queryOctopus",
+        "/gateway/platform/octopus/add",
+    ),
+}
 
 
 def _mark_token_expired(result: dict | None) -> dict | None:
@@ -327,6 +338,37 @@ class HanchuessApiClient:
                 break
             if not result or result.get("code") == 401:
                 break
+        return _mark_token_expired(result) or {}
+
+    async def async_get_strategy(self, kind: str, sn: str, language: str = "en") -> dict:
+        """Read the latest Weather Optimize or Octopus record (``kind``).
+
+        The record is in ``data`` of the response; {"_token_expired": True}
+        on a 401, {} if the request failed. The read identifies the inverter
+        as ``pcsId`` (saves use ``sn``), as the web console sends it.
+        """
+        read_path, _ = STRATEGY_PATHS[kind]
+        payload = _encrypt_payload({"pcsId": sn})
+        return await self._console_post(read_path, payload, language)
+
+    async def async_save_strategy(self, kind: str, record: dict, language: str = "en") -> dict:
+        """Save a full Weather Optimize or Octopus record (``kind``).
+
+        Every save creates a new record, so this is sent exactly once: no
+        retries and no fallback header sets, unlike the reads.
+        """
+        _, save_path = STRATEGY_PATHS[kind]
+        variants = self._minute_chart_header_sets()
+        known = getattr(self, "_chart_headers_idx", None)
+        headers = variants[known] if known is not None else variants[0]
+        result = await self._request(
+            save_path,
+            _encrypt_payload(record),
+            language=language,
+            retries=1,
+            send_as_json=False,
+            extra_headers=headers,
+        )
         return _mark_token_expired(result) or {}
 
     def _minute_chart_header_sets(self) -> list[dict]:

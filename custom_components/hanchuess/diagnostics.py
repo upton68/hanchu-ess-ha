@@ -13,6 +13,8 @@ from .battery import station_summary
 TO_REDACT = {"token", "account", "password", "sn", "stationId", "username", "pwd",
              "unique_id", "title", "devId", "battery_serials", "deviceId",
              "stationName"}
+# The Octopus record carries the postcode it uses for prices.
+STRATEGY_REDACT = TO_REDACT | {"postalCode"}
 
 
 def _redact_battery_payload(payload: Any) -> dict[str, Any]:
@@ -114,6 +116,18 @@ async def async_get_config_entry_diagnostics(
     diag["startup_values"] = async_redact_data(
         store.startup_values or {}, TO_REDACT
     )
+    strategy = getattr(store, "strategy", None)
+    if strategy is not None:
+        records = getattr(strategy, "data", None) or {}
+        diag["strategy"] = {
+            kind: {
+                "record": async_redact_data(records.get(kind), STRATEGY_REDACT)
+                if isinstance(records.get(kind), dict) else records.get(kind),
+                "error": (getattr(strategy, "errors", None) or {}).get(kind),
+                "pending": sorted(strategy.staging[kind].pending),
+            }
+            for kind in ("weather", "octopus")
+        }
 
     return diag
 

@@ -3,6 +3,7 @@ import asyncio
 from datetime import date, timedelta as _td
 import logging
 from datetime import timedelta
+from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -12,6 +13,18 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from .api import HanchuessApiClient, ReauthRequired
 from .battery import battery_dev_ids, station_battery_values
 from .energy import BatteryEnergyState, add_samples
+from .staging import SettingsStagingBuffer
+from .strategy import (
+    KINDS as STRATEGY_KINDS,
+    OCTOPUS,
+    PRIORITY_KEY,
+    WEATHER,
+    changes_applied,
+    has_settings,
+    merge_record,
+    save_succeeded,
+    strategy_record,
+)
 from .const import (
     DOMAIN,
     CONF_REALTIME_INTERVAL,
@@ -26,6 +39,7 @@ from .const import (
     DEFAULT_SCHEDULE_INTERVAL,
     MIN_SCHEDULE_INTERVAL,
     SCHEDULE_KEYS,
+    STRATEGY_INTERVAL,
     DEFAULT_REALTIME_INTERVAL,
     DEFAULT_STATISTICS_INTERVAL,
     DEFAULT_BATTERY_INTERVAL,
@@ -618,6 +632,222 @@ class HanchuessHistoryCoordinator(DataUpdateCoordinator):
         if year_rows is None and all_rows is None and not previous:
             raise UpdateFailed("Failed to read station energy history")
         return data
+
+    def _update_entry_token(self, token: str):
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            self.hass.config_entries.async_update_entry(
+                entry, data={**entry.data, "token": token}
+            )
+
+
+def _describe_failure(result) -> str:
+    if not isinstance(result, dict) or not result:
+        return "request failed"
+    if result.get("_token_expired"):
+        return "token expired"
+    return f"code={result.get('code')} msg={result.get('msg') or result.get('message')}"
+
+
+class HanchuessStrategyCoordinator(DataUpdateCoordinator):
+    """Weather Optimize and Octopus strategy records (issue #72), every 5 min.
+
+    Data is {"weather": record | None, "octopus": record | None}; a failed read
+    keeps the last record. All the entities are disabled by default, and a
+    coordinator only polls while it has listeners, so nothing is read unless
+    someone enables one. Auth problems are left to the realtime coordinator,
+    as for the schedule poll.
+
+    Each strategy has its own staging buffer, separate from the inverter's
+    iotSet buffer. async_save() reads the latest record, merges the staged
+    changes into it, saves it once and reads it back.
+    """
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, client: HanchuessApiClient):
+        super().__init__(
+            hass,
+            _LOGGER,
+            name="hanchuess_strategy",
+            config_entry=entry,
+            update_interval=timedelta(seconds=STRATEGY_INTERVAL),
+        )
+        self.entry = entry
+        self.client = client
+        self.staging = {kind: SettingsStagingBuffer() for kind in STRATEGY_KINDS}
+        self.errors: dict[str, str | None] = {}
+        self._lock = asyncio.Lock()
+        self._first_read = None
+
+    @property
+    def _sn(self) -> str:
+        return self.entry.data["sn"]
+
+    def _language(self) -> str:
+        return self.hass.config.language or "en"
+
+    def record(self, kind: str) -> dict | None:
+        return (self.data or {}).get(kind)
+
+    def async_ensure_loaded(self) -> None:
+        """Start one background read if nothing has been read yet.
+
+        Called by each entity as it is added, so enabling an entity shows
+        values straight away instead of after the first poll interval.
+        """
+        if self.data is not None or self._first_read is not None:
+            return
+        self._first_read = self.entry.async_create_background_task(
+            self.hass, self.async_refresh(), "hanchuess strategy first read"
+        )
+
+    async def _async_update_data(self) -> dict:
+        async with self._lock:
+            previous = self.data or {}
+            data = {}
+            for kind in STRATEGY_KINDS:
+                result = await self.client.async_get_strategy(
+                    kind, self._sn, self._language()
+                )
+                record = strategy_record(result)
+                self.errors[kind] = None if record is not None else _describe_failure(result)
+                data[kind] = record if record is not None else previous.get(kind)
+            if not previous and all(data[kind] is None for kind in STRATEGY_KINDS):
+                raise UpdateFailed(
+                    "Failed to read the Weather Optimize and Octopus settings"
+                )
+            return data
+
+    async def _call(self, request):
+        """Run ``request``; on a 401, refresh the token and run it once more.
+
+        A 401 means the cloud did nothing, so repeating a save is safe here.
+        A rejected refresh is not escalated: the realtime coordinator raises
+        the reauth prompt on its next poll.
+        """
+        result = await request()
+        if not (isinstance(result, dict) and result.get("_token_expired")):
+            return result
+        try:
+            token = await self.client.async_refresh_token(force=True)
+        except ReauthRequired:
+            return result
+        if not token:
+            return result
+        self._update_entry_token(token)
+        return await request()
+
+    async def _read_latest(self, kind: str) -> dict | None:
+        language = self._language()
+        result = await self._call(
+            lambda: self.client.async_get_strategy(kind, self._sn, language)
+        )
+        record = strategy_record(result)
+        self.errors[kind] = None if record is not None else _describe_failure(result)
+        return record
+
+    def _set_record(self, kind: str, record: dict) -> None:
+        self.async_set_updated_data({**(self.data or {}), kind: record})
+
+    async def _save_one(self, kind: str, staged: dict) -> tuple[bool, str | None]:
+        latest = await self._read_latest(kind)
+        if latest is None:
+            return False, f"Could not read the current settings ({self.errors.get(kind)})"
+        if not has_settings(latest):
+            # Never build a record from scratch: save it once in the app first.
+            return False, (
+                "No existing settings found. Open this strategy in the Hanchu "
+                "app and save it once, then try again."
+            )
+        payload = merge_record(latest, staged, self._sn)
+        language = self._language()
+        _LOGGER.info(
+            "[HANCHUESS] Saving %s strategy for %s: %s",
+            kind, self._sn, sorted(staged),
+        )
+        result = await self._call(
+            lambda: self.client.async_save_strategy(kind, payload, language)
+        )
+        after = await self._read_latest(kind)
+        if after is not None:
+            self._set_record(kind, after)
+        if save_succeeded(result):
+            return True, None
+        # The save is never repeated (each one creates a record), but the
+        # response may have been lost after the record was created.
+        if (
+            after is not None
+            and after.get("id") != latest.get("id")
+            and changes_applied(after, staged, self._sn)
+        ):
+            _LOGGER.info("[HANCHUESS] %s save had no clear reply but was applied", kind)
+            return True, None
+        msg = result.get("msg") if isinstance(result, dict) else None
+        return False, msg or _describe_failure(result)
+
+    def _discard_saved(self, kind: str, saved: dict) -> None:
+        """Unstage what was saved, unless it was changed again meanwhile."""
+        buffer = self.staging[kind]
+        buffer.discard(
+            [key for key, value in saved.items()
+             if key in buffer.pending and buffer.pending[key] == value]
+        )
+
+    async def async_save(self, kind: str) -> bool:
+        """Save the staged changes for one strategy.
+
+        A staged Strategy priority is saved to both records, since the app
+        shows it as one setting. The other strategy's own staged changes stay
+        staged until its Save is pressed.
+        """
+        async with self._lock:
+            staged = self.staging[kind].snapshot()
+            if not staged:
+                _LOGGER.debug("[HANCHUESS] %s save: nothing staged", kind)
+                return True
+            ok, error = await self._save_one(kind, staged)
+            failed = kind
+            saved = []
+            if ok:
+                saved.append(kind)
+                self._discard_saved(kind, staged)
+                if PRIORITY_KEY in staged:
+                    other = OCTOPUS if kind == WEATHER else WEATHER
+                    priority = {PRIORITY_KEY: staged[PRIORITY_KEY]}
+                    ok, error = await self._save_one(other, priority)
+                    if ok:
+                        saved.append(other)
+                        self._discard_saved(other, priority)
+                    else:
+                        failed = other
+        for saved_kind in saved:
+            persistent_notification.async_dismiss(
+                self.hass, self._notification_id(saved_kind)
+            )
+        if ok:
+            return True
+        self._notify_failure(failed, error)
+        return False
+
+    def _notification_id(self, kind: str) -> str:
+        return f"hanchuess_{kind}_save_failed_{self._sn}"
+
+    def _notify_failure(self, kind: str, error: str | None) -> None:
+        name = "Weather Optimize" if kind == WEATHER else "Octopus strategy"
+        pending = sorted(self.staging[kind].pending)
+        _LOGGER.error("[HANCHUESS] %s save failed for %s: %s", name, self._sn, error)
+        try:
+            persistent_notification.async_create(
+                self.hass,
+                (
+                    f"Could not save the {name} settings for inverter **{self._sn}**.\n\n"
+                    f"Pending: `{', '.join(pending)}`\n\n"
+                    f"Error: {error or 'Unknown error'}\n\n"
+                    "The changes are still staged. Press **Save** again to retry."
+                ),
+                title=f"Hanchuess — {name} not saved",
+                notification_id=self._notification_id(kind),
+            )
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("[HANCHUESS] Could not create persistent notification: %s", err)
 
     def _update_entry_token(self, token: str):
         for entry in self.hass.config_entries.async_entries(DOMAIN):

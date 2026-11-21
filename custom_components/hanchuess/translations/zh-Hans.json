@@ -28,10 +28,19 @@
           "account": "账号",
           "password": "密码"
         }
+      },
+      "reconfigure": {
+        "title": "更新 Hanchuess 密码",
+        "description": "输入新的 Hanchu 密码（例如在 Hanchu App 中修改密码后）。账号：{account}",
+        "data": {
+          "account": "账号",
+          "password": "密码"
+        }
       }
     },
     "error": {
       "auth_failed": "授权失败，请检查账号信息",
+      "wrong_account": "该账号下没有此条目对应的逆变器或电站",
       "cannot_connect": "无法连接到服务器",
       "no_devices": "该账号下未找到 Hanchu 逆变器或电池",
       "station_lookup_failed": "无法加载站点详情",
@@ -39,7 +48,8 @@
     },
     "abort": {
       "already_configured": "该设备已配置",
-      "reauth_successful": "重新认证成功"
+      "reauth_successful": "重新认证成功",
+      "reconfigure_successful": "密码已更新"
     }
   },
   "options": {

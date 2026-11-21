@@ -33,6 +33,7 @@ from .coordinator import (
     HanchuessScheduleCoordinator,
     HanchuessBatteryEnergyCoordinator,
     HanchuessHistoryCoordinator,
+    HanchuessStrategyCoordinator,
     energy_store_key,
 )
 from .staging import SettingsStagingBuffer
@@ -93,6 +94,8 @@ class HanchuessData:
     history: HanchuessHistoryCoordinator | None = None
     # Redacted outline of the station (battery-only), for diagnostics.
     station_summary: dict | None = None
+    # Weather Optimize and Octopus strategy records and their staging.
+    strategy: HanchuessStrategyCoordinator | None = None
 
 
 def is_battery_only(entry) -> bool:
@@ -769,6 +772,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
         schedule=schedule_coordinator,
         energy=_start_energy(hass, entry, client, battery_coordinator),
         history=_start_history(hass, entry, client),
+        strategy=HanchuessStrategyCoordinator(hass, entry, client),
     )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)

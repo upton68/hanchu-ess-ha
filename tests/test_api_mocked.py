@@ -462,3 +462,79 @@ async def test_connection_error_returns_empty_device_list(hass):
         m.post(DEVICE_LIST, exception=aiohttp.ClientError())
         devices = await client.async_get_devices()
     assert devices == []
+
+
+# ---------------------------------------------------------------------------
+# Weather Optimize / Octopus strategies (#72)
+# ---------------------------------------------------------------------------
+
+WEATHER_READ = f"{BASE_URL}/gateway/platform/weather/queryWeatherAndOctopus"
+WEATHER_SAVE = f"{BASE_URL}/gateway/platform/iessWeather/add"
+OCTOPUS_READ = f"{BASE_URL}/gateway/platform/weather/queryOctopus"
+OCTOPUS_SAVE = f"{BASE_URL}/gateway/platform/octopus/add"
+
+
+def _sent(m, url):
+    """The (decrypted) bodies and headers posted to ``url``."""
+    from yarl import URL
+
+    calls = m.requests[("POST", URL(url))]
+    return [(_decrypt_payload(c.kwargs["data"]), c.kwargs["headers"]) for c in calls]
+
+
+@pytest.mark.parametrize("kind,url", [("weather", WEATHER_READ), ("octopus", OCTOPUS_READ)])
+async def test_get_strategy_sends_encrypted_pcs_id(hass, kind, url):
+    client = HanchuessApiClient(hass, BASE_URL, token="t")
+    record = {"id": 27482, "sn": "SN1"}
+    with aioresponses() as m:
+        m.post(url, payload={"code": 200, "success": True, "data": record})
+        result = await client.async_get_strategy(kind, "SN1")
+        sent = _sent(m, url)
+    assert result["data"] == record
+    body, headers = sent[0]
+    assert body == {"pcsId": "SN1"}  # reads use pcsId; saves use sn
+    assert headers["access-token"] == "t"
+    assert "Content-Type" not in headers  # text/plain body, as the console sends
+
+
+async def test_get_strategy_401_marks_token_expired(hass):
+    client = HanchuessApiClient(hass, BASE_URL, token="t")
+    with aioresponses() as m:
+        m.post(OCTOPUS_READ, status=401)
+        result = await client.async_get_strategy("octopus", "SN1")
+    assert result == {"_token_expired": True}
+
+
+@pytest.mark.parametrize("kind,url", [("weather", WEATHER_SAVE), ("octopus", OCTOPUS_SAVE)])
+async def test_save_strategy_posts_full_record(hass, kind, url):
+    client = HanchuessApiClient(hass, BASE_URL, token="t")
+    record = {"id": 27482, "sn": "SN1", "confirm": "0", "weatherOpen": "1"}
+    with aioresponses() as m:
+        m.post(url, payload={"code": 200, "success": True})
+        result = await client.async_save_strategy(kind, record)
+        sent = _sent(m, url)
+    assert result["success"] is True
+    assert sent[0][0] == record
+    assert "pcsId" not in sent[0][0]
+
+
+async def test_save_strategy_is_sent_once_on_failure(hass):
+    """Each save creates a record, so a failed one is never repeated."""
+    client = HanchuessApiClient(hass, BASE_URL, token="t")
+    with aioresponses() as m:
+        m.post(OCTOPUS_SAVE, exception=asyncio.TimeoutError())
+        m.post(OCTOPUS_SAVE, payload={"code": 200})  # would be a second record
+        result = await client.async_save_strategy("octopus", {"sn": "SN1"})
+        sent = _sent(m, OCTOPUS_SAVE)
+    assert result == {}
+    assert len(sent) == 1
+
+
+async def test_save_strategy_rejection_not_retried_with_other_headers(hass):
+    client = HanchuessApiClient(hass, BASE_URL, token="t")
+    with aioresponses() as m:
+        m.post(WEATHER_SAVE, payload={"code": 100, "msg": "Invalid"})
+        result = await client.async_save_strategy("weather", {"sn": "SN1"})
+        sent = _sent(m, WEATHER_SAVE)
+    assert result == {"code": 100, "msg": "Invalid"}
+    assert len(sent) == 1
