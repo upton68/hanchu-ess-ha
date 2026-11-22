@@ -377,3 +377,34 @@ async def test_normal_setup_seeds_battery_dev_ids(hass: HomeAssistant):
     assert "D2" in queried and "B2" not in queried
     # Normal installs don't re-read the station list on each battery poll.
     assert client.async_get_station_detail.await_count == 1
+
+
+async def test_normal_setup_continues_when_battery_detail_is_empty(hass: HomeAssistant):
+    """#76: HESS-HY-T battery detail comes back empty; the inverter must still load."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id="SN1",
+        data={"sn": "SN1", "token": "tok", "stationId": "ST1", "battery_serials": ["B1"]},
+    )
+    entry.add_to_hass(hass)
+    client = MagicMock()
+    client.token = "tok"
+    client.should_refresh_token.return_value = False
+    client.async_get_device_status = AsyncMock(return_value={"devStatus": 1, "stationId": "ST1"})
+    client.async_get_device_statistics = AsyncMock(return_value={"load": 1})
+    client.async_get_menu = AsyncMock(return_value={"code": 200, "data": {}})
+    client.async_iot_get = AsyncMock(return_value={})
+    client.async_get_station_detail = AsyncMock(
+        return_value=_station([HANCHU_PCS], [{**_bms("B1"), "devId": "B1"}])
+    )
+    client.async_get_battery_data = AsyncMock(return_value=EMPTY)
+    hass.data.setdefault(DOMAIN, {})["_client"] = client
+    hass.data[DOMAIN]["_card_registered"] = True
+
+    with patch.object(hass.config_entries, "async_forward_entry_setups", AsyncMock()):
+        assert await hanchuess.async_setup_entry(hass, entry) is True
+
+    battery = entry.runtime_data.battery
+    assert battery is not None
+    assert battery.data == {}  # battery sensors can be set up, and show unavailable
+    assert battery.last_update_success is False
+    assert entry.runtime_data.realtime.last_update_success is True

@@ -10,6 +10,15 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Fixed
+- Since 2.6.0, the whole integration failed to load (retrying setup
+  forever) if the cloud returned no battery detail, as it does for the
+  battery on some HESS-HY-T three-phase systems. 2.5.0 accepted this. The
+  inverter now loads as normal, and the battery sensors show unavailable
+  until the cloud provides battery data (#76).
+- Adding an account whose inverter is already set up now says "already
+  configured" instead of "No Hanchu inverters or batteries found" (#76).
+
 ## [2.10.0] - 2026-11-22
 
 ### Added

@@ -87,6 +87,10 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # account's stations (e.g. with a third-party inverter).
                 if await self._discover_battery_stations():
                     return await self.async_step_battery_station()
+                if self._configured_inverters():
+                    # Everything on the account is already set up: say so
+                    # rather than "no devices found" (#76).
+                    return self.async_abort(reason="already_configured")
                 errors["base"] = "no_devices"
             else:
                 errors["base"] = "auth_failed"
@@ -106,6 +110,14 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         } | {
             e.data.get("sn") for e in self.hass.config_entries.async_entries(DOMAIN)
         }
+
+    def _configured_inverters(self) -> list[str]:
+        """Inverters on the account that already have an entry here."""
+        configured = self._configured_ids()
+        return [
+            d["sn"] for d in self._devices
+            if d.get("devType") == "2" and d.get("sn") in configured
+        ]
 
     def _available_inverters(self) -> dict:
         configured = self._configured_ids()
