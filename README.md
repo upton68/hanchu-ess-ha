@@ -370,9 +370,37 @@ these settings laid out as in the app.
 > Charge/Discharge switches, or automations that write the charge slots), the
 > two can fight each other. Use one or the other.
 
+> [!WARNING]
+> **Octopus works from Agile prices, not your tariff.** The Electricity Price
+> Strategy only knows your postcode. In Point settings it picks the cheapest
+> half-hours in each window from the public **Agile** prices for your region,
+> whatever Octopus tariff you're actually on. On Intelligent Go, Go, Cosy or
+> Flux it can grid-charge the battery at your peak rate. Seen in practice: with
+> 2 slots in 00:00-08:00 on Intelligent Go, it charged at 06:30-07:00, the
+> second-cheapest Agile half-hour that morning, while the import rate was peak.
+>
+> **Turning Octopus Strategy off isn't enough on its own.** While the master
+> switch is off, the Hanchu console hides the window switches and slot counts,
+> and changes to them aren't kept when saved. Whatever was stored before stays
+> on the inverter and can still trigger charging. To disable it fully:
+>
+> 1. Turn **Octopus Strategy** on.
+> 2. Turn off **Octopus Switch 00:00-08:00** and **Octopus Switch 12:00-19:00**,
+>    and set both **Octopus Charge Slots** to 0.
+> 3. Press **Save Octopus Strategy**.
+> 4. Turn **Octopus Strategy** off and press **Save Octopus Strategy** again.
+>
+> Remember the save timing above: a save after 22:00 only applies from the day
+> after tomorrow, so the next morning can still run the old settings.
+>
+> **Using Predbat or another scheduler?** Keep Octopus fully disabled as above.
+> The inverter acts on it on its own, and Predbat can't see or override it.
+
 ## Predbat Integration
 
 [Predbat](https://github.com/springfall2008/batpred) — a Home Assistant battery prediction and optimisation add-on — has its own native Hanchu component (v9.7.10 or later), which talks to the Hanchu cloud directly. **For a new install, use that** — see [Hanchu ESS Cloud](https://springfall2008.github.io/batpred/inverter-setup/#hanchu-ess-cloud) in the Predbat docs. It doesn't need this integration, although the two can run side by side.
+
+Whichever setup you use, make sure Hanchu's own Octopus strategy is fully disabled, not just switched off: see the warning in [Weather Optimize and Octopus strategies](#weather-optimize-and-octopus-strategies).
 
 The older setup, which drives Predbat through this integration with a bridge script via Predbat's generic Service API, is kept for existing users in [docs/predbat-bridge.md](docs/predbat-bridge.md), with its `apps.yaml` template in [docs/hanchu_cloud.yaml](docs/hanchu_cloud.yaml).
 
@@ -518,6 +546,9 @@ instructions, CI checks, and the contribution workflow are documented in
 - Weather Optimize and Octopus run in the Hanchu cloud and can conflict with
   battery control from Home Assistant (Predbat, `device_control`, fast charge) if
   both are active. See [Weather Optimize and Octopus strategies](#weather-optimize-and-octopus-strategies).
+- Octopus chooses its slots from Agile prices whatever your tariff, and changes
+  to its window switches and slot counts saved while **Octopus Strategy** is off
+  aren't kept. See the warning in [Weather Optimize and Octopus strategies](#weather-optimize-and-octopus-strategies).
 
 ## Diagnostics
 

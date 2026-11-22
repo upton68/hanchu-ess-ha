@@ -10,6 +10,13 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Documentation
+- **Octopus strategy warning** in the README: it picks slots from Agile
+  prices whatever your tariff, and changes to the window switches and slot
+  counts aren't kept while Octopus Strategy is off, so stored slots can still
+  charge the battery. Adds the steps to disable it fully, and a pointer from
+  the Predbat section and Known Limitations.
+
 ## [2.11.0] - 2026-11-22
 
 Support for **Home-ESS-HV high-voltage battery stacks** (#78), tested by the
