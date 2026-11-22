@@ -713,7 +713,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: HanchuessConfigEntry) ->
         # (e.g. older batteries) are registered under a devId that differs
         # from their serial, and come back empty when queried by serial.
         battery_coordinator.dev_ids.update(battery_dev_ids(station_detail))
-        await _async_initial_refresh(battery_coordinator, entry)
+        # Batteries are optional on an inverter install: if the cloud has no
+        # battery detail (seen on HESS-HY-T three-phase systems, #76), carry
+        # on without it instead of failing the whole setup. The coordinator
+        # keeps polling, and the battery sensors stay unavailable until a
+        # read succeeds.
+        await battery_coordinator.async_refresh()
+        if not battery_coordinator.last_update_success:
+            _LOGGER.warning(
+                "[HANCHUESS] Battery data not available yet; continuing without it"
+            )
+            battery_coordinator.data = {}
 
     # Fetch menu to get device-specific min/max values for number entities
     language = hass.config.language or "en"

@@ -865,3 +865,15 @@ async def test_reconfigure_battery_only_checks_station(hass: HomeAssistant):
         assert entry.data["password"] == "new"
     finally:
         patcher.stop()
+
+
+async def test_user_flow_inverter_already_configured_aborts(hass: HomeAssistant):
+    """#76: re-adding an account whose inverter is already set up says so."""
+    MockConfigEntry(domain=DOMAIN, unique_id="SN1", data={"sn": "SN1"}).add_to_hass(hass)
+    patcher, client = _patched_client(devices=[{"sn": "SN1", "devType": "2"}], stations=[])
+    try:
+        result = await _login(hass)
+    finally:
+        patcher.stop()
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
