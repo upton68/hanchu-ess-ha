@@ -294,14 +294,37 @@ async def test_missing_detail_falls_back_to_station_soc(hass: HomeAssistant):
     assert status["error"] == "code=100 msg=device not found"
 
 
-async def test_normal_mode_does_not_read_station_each_poll(hass: HomeAssistant):
+async def test_normal_mode_does_not_read_station_when_batteries_work(hass: HomeAssistant):
+    client = _poll_client({}, {"B1": DETAIL_OK, "B2": DETAIL_OK})
+    coordinator = _coordinator(hass, client, mode=None)
+    await coordinator._async_update_data()
+    client.async_get_station_detail.assert_not_called()
+
+
+async def test_normal_mode_without_station_values_leaves_battery_out(hass: HomeAssistant):
     client = _poll_client({}, {"B1": DETAIL_OK, "B2": EMPTY})
     coordinator = _coordinator(hass, client, mode=None)
     data = await coordinator._async_update_data()
-    client.async_get_station_detail.assert_not_called()
     assert "B2" not in data
     assert coordinator.battery_status["B2"] == {
         "queried_by": "sn", "dev_id_differs": False, "ok": False, "source": None, "error": "empty data"}
+
+
+# HV stack (#78): queryBatteryDataDivisions has no per-module data.
+HV_NOT_FOUND = {"code": 100, "msg": "90060 Not Found Data!", "success": False}
+
+
+async def test_normal_mode_hv_stack_falls_back_to_station_values(hass: HomeAssistant):
+    station = _station([HANCHU_PCS], [{**_bms("B1", soc=76.5), "devId": "B1"}])
+    client = _poll_client(station, {"B1": HV_NOT_FOUND})
+    coordinator = _coordinator(hass, client, mode=None, serials=("B1",))
+    data = await coordinator._async_update_data()  # no UpdateFailed: SOC is there
+    assert data["B1"]["socPack"] == 76.5
+    assert "vPack" not in data["B1"]
+    client.async_get_station_detail.assert_awaited_once()
+    status = coordinator.battery_status["B1"]
+    assert status["source"] == "station" and status["ok"] is True
+    assert status["error"] == "code=100 msg=90060 Not Found Data!"
 
 
 async def test_battery_only_polls_every_minute_by_default(hass: HomeAssistant):
@@ -393,8 +416,10 @@ async def test_normal_setup_continues_when_battery_detail_is_empty(hass: HomeAss
     client.async_get_device_statistics = AsyncMock(return_value={"load": 1})
     client.async_get_menu = AsyncMock(return_value={"code": 200, "data": {}})
     client.async_iot_get = AsyncMock(return_value={})
+    # Setup reads the station once; the battery fallback's read finds nothing
+    # (e.g. the station call fails too), so there is no battery data at all.
     client.async_get_station_detail = AsyncMock(
-        return_value=_station([HANCHU_PCS], [{**_bms("B1"), "devId": "B1"}])
+        side_effect=[_station([HANCHU_PCS], [{**_bms("B1"), "devId": "B1"}]), {}]
     )
     client.async_get_battery_data = AsyncMock(return_value=EMPTY)
     hass.data.setdefault(DOMAIN, {})["_client"] = client

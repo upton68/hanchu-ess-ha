@@ -10,6 +10,18 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.11.0-beta.1] - 2026-11-22
+
+Beta for #78 (Home-ESS-HV high-voltage battery stacks).
+
+### Changed
+- Batteries without per-module detail, such as Home-ESS-HV high-voltage
+  stacks (the cloud answers `90060 Not Found Data!`), now show the SOC, SOH,
+  model, online status and firmware the station list carries, on inverter
+  installs as well as battery-only ones. The station list is only read when
+  a battery needs it, so installs whose batteries already work make no
+  extra calls (#78).
+
 ## [2.10.1] - 2026-11-22
 
 Fix for HESS-HY-T three-phase systems with ESS-HV batteries (#76), tested by

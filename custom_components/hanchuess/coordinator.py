@@ -214,6 +214,18 @@ class HanchuessBatteryCoordinator(DataUpdateCoordinator):
             return "empty data"
         return None
 
+    async def _station_values(self, language: str) -> dict[str, dict]:
+        """Per-battery values from the station list (empty if unavailable)."""
+        station_id = self.entry.data.get("stationId")
+        if not station_id:
+            return {}
+        detail = await self.client.async_get_station_detail(station_id, language)
+        if not (detail and detail.get("success", True) and detail.get("data")):
+            return {}
+        self.station_detail = detail
+        self.dev_ids.update(battery_dev_ids(detail))
+        return station_battery_values(detail)
+
     async def _async_update_data(self) -> dict:
         battery_serials = self.entry.data.get("battery_serials", [])
         if not battery_serials:
@@ -221,14 +233,8 @@ class HanchuessBatteryCoordinator(DataUpdateCoordinator):
         language = self.hass.config.language or "en"
 
         station_values: dict[str, dict] = {}
-        if self.battery_only and self.entry.data.get("stationId"):
-            detail = await self.client.async_get_station_detail(
-                self.entry.data["stationId"], language
-            )
-            if detail and detail.get("success", True) and detail.get("data"):
-                self.station_detail = detail
-                self.dev_ids.update(battery_dev_ids(detail))
-                station_values = station_battery_values(detail)
+        if self.battery_only:
+            station_values = await self._station_values(language)
 
         async def _fetch(serial: str):
             dev_id = self.dev_ids.get(serial) or serial
@@ -243,6 +249,15 @@ class HanchuessBatteryCoordinator(DataUpdateCoordinator):
             return serial, result, queried_by
 
         results = await asyncio.gather(*(_fetch(serial) for serial in battery_serials))
+        if not self.battery_only and any(
+            not self._has_detail(result) and not (result and result.get("_token_expired"))
+            for _, result, _ in results
+        ):
+            # A battery without per-module detail, e.g. an HV stack (#78):
+            # fall back to the SOC/SOH/model the station list carries. Only
+            # read when a battery needs it, so working installs make no
+            # extra call.
+            station_values = await self._station_values(language)
         data = {}
         token_expired = False
         for serial, result, queried_by in results:
