@@ -124,3 +124,37 @@ def station_summary(station_detail: dict | None) -> dict:
             for b in data.get("bmsList") or []
         ],
     }
+
+
+# rack/queryRackDataDivisions field -> the battery sensors' key (LV detail).
+_RACK_FIELDS = {
+    "rackTotalV": "vPack",          # stack voltage
+    "rackTotalA": "iPack",          # + charging, - discharging
+    "rackSoc": "socPack",
+    "rackSoh": "sohPack",
+    "rackCapFull": "capFull",       # Ah
+    "rackCapRemain": "capRemain",   # Ah
+    "rackCapacity": "designCapacity",  # kWh
+    "maxCellV": "maxVoltage",
+    "minCellV": "minVoltage",
+    "maxCellVDiff": "maxVoltageDifference",
+    "packAvgT": "tPack",
+    "rackSoftVer": "softwareVer",
+    "onlineStatus": "onlineStatus",
+    "dataTimeTs": "dataTimeTs",
+}
+# Kept as-is for later use (daily energy straight from the stack, pack count).
+_RACK_EXTRA = ("todayCharge", "todayDischarge", "rackPwr", "packNum", "runStateBat")
+
+
+def rack_battery_values(rack_data: dict | None) -> dict:
+    """Battery sensor values from a high-voltage stack's rack data."""
+    if not isinstance(rack_data, dict):
+        return {}
+    values = {
+        key: rack_data[field]
+        for field, key in _RACK_FIELDS.items()
+        if rack_data.get(field) is not None
+    }
+    values.update({k: rack_data[k] for k in _RACK_EXTRA if rack_data.get(k) is not None})
+    return values

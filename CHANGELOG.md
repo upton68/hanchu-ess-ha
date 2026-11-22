@@ -10,6 +10,19 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.11.0-beta.2] - 2026-11-22
+
+### Added
+- **High-voltage battery stacks** (Home-ESS-HV, #78): the stack's own
+  readings from `rack/queryRackDataDivisions` (the web console's Battery
+  Analysis page) fill the existing battery sensors: voltage, current, power,
+  SOC, SOH, full and remaining capacity, design capacity, max/min cell
+  voltage and difference, temperature and firmware. Tried only for a battery
+  whose per-module detail fails; it tries the battery's serial, then its
+  devId, and remembers which works. A battery that answers neither isn't
+  asked again until restart. Diagnostics show `source: "rack"` and which ID
+  was used.
+
 ## [2.11.0-beta.1] - 2026-11-22
 
 Beta for #78 (Home-ESS-HV high-voltage battery stacks).

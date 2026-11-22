@@ -11,7 +11,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from .api import HanchuessApiClient, ReauthRequired
-from .battery import battery_dev_ids, station_battery_values
+from .battery import battery_dev_ids, rack_battery_values, station_battery_values
 from .energy import BatteryEnergyState, add_samples
 from .staging import SettingsStagingBuffer
 from .strategy import (
@@ -196,6 +196,9 @@ class HanchuessBatteryCoordinator(DataUpdateCoordinator):
         self.dev_ids: dict[str, str] = {}
         # serial -> {"ok", "source", "queried_by", "dev_id_differs", "error"}
         self.battery_status: dict[str, dict] = {}
+        # High-voltage stacks: serial -> ID the rack call accepts (False = not a stack).
+        self._rack_id: dict[str, str | bool] = {}
+        self._rack_id_kind: dict[str, str | None] = {}
         self.station_detail: dict | None = None
 
     @staticmethod
@@ -213,6 +216,33 @@ class HanchuessBatteryCoordinator(DataUpdateCoordinator):
         if not result.get("data"):
             return "empty data"
         return None
+
+    async def _rack_values(self, serial: str, language: str) -> dict:
+        """Readings for a battery that is a high-voltage stack, if it is one.
+
+        Tries the battery's serial, then its devId, and remembers which one
+        the cloud accepts. A battery that answers neither is not asked again
+        until Home Assistant restarts, so LV batteries cost at most one try.
+        """
+        if self._rack_id.get(serial) is False:
+            return {}
+        dev_id = self.dev_ids.get(serial) or serial
+        known = self._rack_id.get(serial)
+        candidates = [known] if known else list(dict.fromkeys([serial, dev_id]))
+        for candidate in candidates:
+            result = await self.client.async_get_rack_data(candidate, language)
+            if result.get("_token_expired"):
+                return {}
+            if self._has_detail(result):
+                values = rack_battery_values(result.get("data"))
+                if values:
+                    self._rack_id[serial] = candidate
+                    self._rack_id_kind[serial] = "sn" if candidate == serial else "devId"
+                    return values
+        if not known:
+            self._rack_id[serial] = False
+            self._rack_id_kind[serial] = None
+        return {}
 
     async def _station_values(self, language: str) -> dict[str, dict]:
         """Per-battery values from the station list (empty if unavailable)."""
@@ -268,9 +298,20 @@ class HanchuessBatteryCoordinator(DataUpdateCoordinator):
                 "queried_by": queried_by,
                 "dev_id_differs": self.dev_ids.get(serial, serial) != serial,
             }
+            rack = None
+            if not self._has_detail(result):
+                rack = await self._rack_values(serial, language)
             if self._has_detail(result):
                 data[serial] = result.get("data") or {}
                 status.update(ok=True, source="detail", error=None)
+            elif rack:
+                # High-voltage stack (#78): the station list's model etc.,
+                # overlaid with the stack's own readings.
+                data[serial] = {**station_values.get(serial, {}), **rack}
+                status.update(
+                    ok=True, source="rack", error=self._error(result),
+                    rack_queried_by=self._rack_id_kind.get(serial),
+                )
             elif station_values.get(serial):
                 data[serial] = dict(station_values[serial])
                 status.update(ok=True, source="station", error=self._error(result))

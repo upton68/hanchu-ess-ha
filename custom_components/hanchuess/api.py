@@ -309,6 +309,18 @@ class HanchuessApiClient:
         })
         return await self._console_post(STATION_HISTORY_PATH, payload, language)
 
+    async def async_get_rack_data(self, sn: str, language: str = "en") -> dict:
+        """A high-voltage battery stack's data (rack/queryRackDataDivisions).
+
+        HV stacks (e.g. Home-ESS-HV-5.12K) have no per-module detail in
+        bmsInfo; the web console's Battery Analysis page reads this instead.
+        Payload as the console sends it.
+        """
+        payload = _encrypt_payload({"sn": sn, "type": "1"})
+        return await self._console_post(
+            "/gateway/platform/rack/queryRackDataDivisions", payload, language
+        )
+
     async def _console_post(self, path: str, payload: str, language: str) -> dict:
         """POST to a web-console endpoint with the console's headers.
 
