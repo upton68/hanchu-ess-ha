@@ -10,6 +10,10 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.10.1-beta.1] - 2026-11-22
+
+Beta for #76 (HESS-HY-T three-phase systems).
+
 ### Fixed
 - Since 2.6.0, the whole integration failed to load (retrying setup
   forever) if the cloud returned no battery detail, as it does for the
