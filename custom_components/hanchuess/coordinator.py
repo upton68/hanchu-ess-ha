@@ -427,6 +427,7 @@ class HanchuessBatteryEnergyCoordinator(DataUpdateCoordinator):
         entry: ConfigEntry,
         client: HanchuessApiClient,
         dev_ids: dict[str, str] | None = None,
+        battery: "HanchuessBatteryCoordinator | None" = None,
     ):
         super().__init__(
             hass,
@@ -441,6 +442,8 @@ class HanchuessBatteryEnergyCoordinator(DataUpdateCoordinator):
         self.client = client
         # Shared with the battery coordinator: sn -> devId from the station.
         self.dev_ids = dev_ids if dev_ids is not None else {}
+        # HV stacks report their own daily energy in the battery data.
+        self.battery = battery
         self.states: dict[str, BatteryEnergyState] = {}
         self.errors: dict[str, str | None] = {}
         self._query_by: dict[str, str] = {}  # sn -> id that returned samples
@@ -566,7 +569,11 @@ class HanchuessBatteryEnergyCoordinator(DataUpdateCoordinator):
         language = self.hass.config.language or "en"
         for attempt in range(2):
             try:
-                results = [await self._update_battery(serial, language) for serial in serials]
+                results = [
+                    self._update_from_stack(serial)
+                    or await self._update_battery(serial, language)
+                    for serial in serials
+                ]
                 break
             except _TokenExpired:
                 if attempt == 0 and await _try_refresh(
@@ -580,6 +587,39 @@ class HanchuessBatteryEnergyCoordinator(DataUpdateCoordinator):
         ):
             raise UpdateFailed("Failed to read battery minute data")
         return self._snapshot()
+
+    def _update_from_stack(self, serial: str) -> bool:
+        """Use an HV stack's own Charge/Discharge Today (#78).
+
+        The minute chart doesn't cover HV stacks, but the rack data carries
+        todayCharge and todayDischarge. Today is the stack's figure; Total
+        adds each increase, and the whole new figure after the cloud resets
+        it at midnight.
+        """
+        data = ((self.battery.data or {}) if self.battery else {}).get(serial) or {}
+        if not data.get("hvStack"):
+            return False
+        try:
+            charge = float(data["todayCharge"])
+            discharge = float(data["todayDischarge"])
+        except (KeyError, TypeError, ValueError):
+            return False
+        state = self.states.setdefault(serial, BatteryEnergyState())
+        for raw, today_attr, total_attr in (
+            (charge, "charge_today", "charge_total"),
+            (discharge, "discharge_today", "discharge_total"),
+        ):
+            previous = getattr(state, today_attr) if state.last_ts is not None else 0.0
+            added = raw - previous if raw >= previous else raw
+            setattr(state, total_attr, getattr(state, total_attr) + added)
+            setattr(state, today_attr, raw)
+        state.day = dt_util.now().date().isoformat()
+        try:
+            state.last_ts = int(data.get("dataTimeTs"))
+        except (TypeError, ValueError):
+            state.last_ts = int(dt_util.utcnow().timestamp() * 1000)
+        self.errors[serial] = None
+        return True
 
     async def async_save_now(self) -> None:
         """Write the totals straight away (on unload, so a reload starts from them)."""

@@ -10,6 +10,19 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.11.0-beta.3] - 2026-11-22
+
+### Added
+- **Charge/Discharge Today and Total for HV stacks** (#78): taken from the
+  stack's own daily figures (`todayCharge`/`todayDischarge`), as the minute
+  chart doesn't cover HV stacks. Total adds each increase, and the new day's
+  figure after the cloud resets at midnight.
+
+### Changed
+- HV stacks no longer get the LV pack sensors they can't fill (Battery
+  Temperature 1-4, Environment and MOS Temperature). Ones created by
+  beta.2 can be deleted from the entity settings.
+
 ## [2.11.0-beta.2] - 2026-11-22
 
 ### Added

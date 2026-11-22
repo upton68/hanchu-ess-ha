@@ -157,4 +157,9 @@ def rack_battery_values(rack_data: dict | None) -> dict:
         if rack_data.get(field) is not None
     }
     values.update({k: rack_data[k] for k in _RACK_EXTRA if rack_data.get(k) is not None})
+    if values:
+        # Marks a stack: it has no LV pack temperatures (tBat1-n, tEnv, tMos)
+        # and reports its own daily energy.
+        values["hvStack"] = True
+        values["numBatT"] = 0
     return values

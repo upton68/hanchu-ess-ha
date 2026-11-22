@@ -639,6 +639,10 @@ def cell_voltage_stat(battery_data: dict, stat: str):
     return None if diff is None else round(diff, 4)
 
 
+# LV pack readings a high-voltage stack doesn't have.
+HV_STACK_ABSENT = {"tEnv", "tMos"}
+
+
 def _battery_temperature_count(battery_data: dict) -> int:
     """Return the number of tBat sensors to surface for a battery."""
     try:
@@ -702,6 +706,8 @@ def _battery_entities(entry, battery_coordinator) -> list:
                     and sensor_key.replace("battery_temperature_", "").isdigit()
                 ):
                     continue
+                if battery_data.get("hvStack") and config.get("key") in HV_STACK_ABSENT:
+                    continue  # an HV stack doesn't report these (#78)
                 entities.append(
                     BatterySensor(battery_coordinator, entry, battery_serial, sensor_key, config)
                 )

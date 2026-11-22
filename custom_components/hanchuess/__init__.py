@@ -888,7 +888,7 @@ def _start_energy(hass, entry, client, battery_coordinator):
     if battery_coordinator is None or not entry.data.get("battery_serials"):
         return None
     energy = HanchuessBatteryEnergyCoordinator(
-        hass, entry, client, battery_coordinator.dev_ids
+        hass, entry, client, battery_coordinator.dev_ids, battery_coordinator
     )
     entry.async_create_background_task(
         hass, energy.async_refresh(), "hanchuess battery energy first read"

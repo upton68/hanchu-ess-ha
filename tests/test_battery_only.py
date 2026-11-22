@@ -503,3 +503,50 @@ async def test_api_rack_payload():
     path, payload = client._request.await_args.args[:2]
     assert path == "/gateway/platform/rack/queryRackDataDivisions"
     assert payload == _encrypt_payload({"sn": "R1", "type": "1"})
+
+
+async def test_hv_stack_energy_from_its_own_daily_figures(hass: HomeAssistant):
+    from custom_components.hanchuess.coordinator import HanchuessBatteryEnergyCoordinator
+
+    entry = MockConfigEntry(domain=DOMAIN, data={"sn": "SN1", "battery_serials": ["B1"]})
+    entry.add_to_hass(hass)
+    battery = MagicMock()
+    battery.data = {"B1": {"hvStack": True, "todayCharge": "19.90", "todayDischarge": "8.80",
+                           "dataTimeTs": 1795379366161}}
+    client = MagicMock()
+    client.async_get_battery_minute_chart = AsyncMock()
+    energy = HanchuessBatteryEnergyCoordinator(hass, entry, client, {}, battery)
+
+    data = await energy._async_update_data()
+    assert (data["B1"]["charge_today"], data["B1"]["charge_total"]) == (19.9, 19.9)
+    assert (data["B1"]["discharge_today"], data["B1"]["discharge_total"]) == (8.8, 8.8)
+    client.async_get_battery_minute_chart.assert_not_called()  # no minute chart for a stack
+
+    battery.data["B1"].update(todayCharge="21.40", todayDischarge="8.80")
+    data = await energy._async_update_data()
+    assert data["B1"]["charge_total"] == pytest.approx(21.4)  # +1.5
+    assert data["B1"]["discharge_total"] == pytest.approx(8.8)  # unchanged
+
+    # Midnight: the cloud resets today's figures; Total keeps counting.
+    battery.data["B1"].update(todayCharge="0.30", todayDischarge="0.10")
+    data = await energy._async_update_data()
+    assert data["B1"]["charge_today"] == 0.3
+    assert data["B1"]["charge_total"] == pytest.approx(21.7)
+    assert data["B1"]["discharge_total"] == pytest.approx(8.9)
+
+
+def test_hv_stack_skips_lv_only_sensors():
+    from custom_components.hanchuess.battery import rack_battery_values
+    from custom_components.hanchuess.sensor import BatterySensor, _battery_entities
+
+    battery = MagicMock()
+    battery.data = {"B1": {**rack_battery_values(RACK_OK["data"]), "devModel": "3"}}
+    entry = SimpleNamespace(
+        data={"battery_serials": ["B1"]},
+        runtime_data=SimpleNamespace(inverter_device_id="d", energy=None),
+    )
+    keys = {e._sensor_key for e in _battery_entities(entry, battery) if isinstance(e, BatterySensor)}
+    assert not any(k.startswith("battery_temperature_") and k[-1].isdigit() for k in keys)
+    assert "battery_voltage" in keys and "battery_soc_pack" in keys
+    configs = {e._config.get("key") for e in _battery_entities(entry, battery) if isinstance(e, BatterySensor)}
+    assert "tEnv" not in configs and "tMos" not in configs and "tPack" in configs
