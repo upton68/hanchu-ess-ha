@@ -11,7 +11,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from .api import HanchuessApiClient, ReauthRequired
-from .battery import battery_dev_ids, station_battery_values
+from .battery import battery_dev_ids, rack_battery_values, station_battery_values
 from .energy import BatteryEnergyState, add_samples
 from .staging import SettingsStagingBuffer
 from .strategy import (
@@ -196,6 +196,9 @@ class HanchuessBatteryCoordinator(DataUpdateCoordinator):
         self.dev_ids: dict[str, str] = {}
         # serial -> {"ok", "source", "queried_by", "dev_id_differs", "error"}
         self.battery_status: dict[str, dict] = {}
+        # High-voltage stacks: serial -> ID the rack call accepts (False = not a stack).
+        self._rack_id: dict[str, str | bool] = {}
+        self._rack_id_kind: dict[str, str | None] = {}
         self.station_detail: dict | None = None
 
     @staticmethod
@@ -214,6 +217,45 @@ class HanchuessBatteryCoordinator(DataUpdateCoordinator):
             return "empty data"
         return None
 
+    async def _rack_values(self, serial: str, language: str) -> dict:
+        """Readings for a battery that is a high-voltage stack, if it is one.
+
+        Tries the battery's serial, then its devId, and remembers which one
+        the cloud accepts. A battery that answers neither is not asked again
+        until Home Assistant restarts, so LV batteries cost at most one try.
+        """
+        if self._rack_id.get(serial) is False:
+            return {}
+        dev_id = self.dev_ids.get(serial) or serial
+        known = self._rack_id.get(serial)
+        candidates = [known] if known else list(dict.fromkeys([serial, dev_id]))
+        for candidate in candidates:
+            result = await self.client.async_get_rack_data(candidate, language)
+            if result.get("_token_expired"):
+                return {}
+            if self._has_detail(result):
+                values = rack_battery_values(result.get("data"))
+                if values:
+                    self._rack_id[serial] = candidate
+                    self._rack_id_kind[serial] = "sn" if candidate == serial else "devId"
+                    return values
+        if not known:
+            self._rack_id[serial] = False
+            self._rack_id_kind[serial] = None
+        return {}
+
+    async def _station_values(self, language: str) -> dict[str, dict]:
+        """Per-battery values from the station list (empty if unavailable)."""
+        station_id = self.entry.data.get("stationId")
+        if not station_id:
+            return {}
+        detail = await self.client.async_get_station_detail(station_id, language)
+        if not (detail and detail.get("success", True) and detail.get("data")):
+            return {}
+        self.station_detail = detail
+        self.dev_ids.update(battery_dev_ids(detail))
+        return station_battery_values(detail)
+
     async def _async_update_data(self) -> dict:
         battery_serials = self.entry.data.get("battery_serials", [])
         if not battery_serials:
@@ -221,14 +263,8 @@ class HanchuessBatteryCoordinator(DataUpdateCoordinator):
         language = self.hass.config.language or "en"
 
         station_values: dict[str, dict] = {}
-        if self.battery_only and self.entry.data.get("stationId"):
-            detail = await self.client.async_get_station_detail(
-                self.entry.data["stationId"], language
-            )
-            if detail and detail.get("success", True) and detail.get("data"):
-                self.station_detail = detail
-                self.dev_ids.update(battery_dev_ids(detail))
-                station_values = station_battery_values(detail)
+        if self.battery_only:
+            station_values = await self._station_values(language)
 
         async def _fetch(serial: str):
             dev_id = self.dev_ids.get(serial) or serial
@@ -243,6 +279,15 @@ class HanchuessBatteryCoordinator(DataUpdateCoordinator):
             return serial, result, queried_by
 
         results = await asyncio.gather(*(_fetch(serial) for serial in battery_serials))
+        if not self.battery_only and any(
+            not self._has_detail(result) and not (result and result.get("_token_expired"))
+            for _, result, _ in results
+        ):
+            # A battery without per-module detail, e.g. an HV stack (#78):
+            # fall back to the SOC/SOH/model the station list carries. Only
+            # read when a battery needs it, so working installs make no
+            # extra call.
+            station_values = await self._station_values(language)
         data = {}
         token_expired = False
         for serial, result, queried_by in results:
@@ -253,9 +298,20 @@ class HanchuessBatteryCoordinator(DataUpdateCoordinator):
                 "queried_by": queried_by,
                 "dev_id_differs": self.dev_ids.get(serial, serial) != serial,
             }
+            rack = None
+            if not self._has_detail(result):
+                rack = await self._rack_values(serial, language)
             if self._has_detail(result):
                 data[serial] = result.get("data") or {}
                 status.update(ok=True, source="detail", error=None)
+            elif rack:
+                # High-voltage stack (#78): the station list's model etc.,
+                # overlaid with the stack's own readings.
+                data[serial] = {**station_values.get(serial, {}), **rack}
+                status.update(
+                    ok=True, source="rack", error=self._error(result),
+                    rack_queried_by=self._rack_id_kind.get(serial),
+                )
             elif station_values.get(serial):
                 data[serial] = dict(station_values[serial])
                 status.update(ok=True, source="station", error=self._error(result))
@@ -371,6 +427,7 @@ class HanchuessBatteryEnergyCoordinator(DataUpdateCoordinator):
         entry: ConfigEntry,
         client: HanchuessApiClient,
         dev_ids: dict[str, str] | None = None,
+        battery: "HanchuessBatteryCoordinator | None" = None,
     ):
         super().__init__(
             hass,
@@ -385,6 +442,8 @@ class HanchuessBatteryEnergyCoordinator(DataUpdateCoordinator):
         self.client = client
         # Shared with the battery coordinator: sn -> devId from the station.
         self.dev_ids = dev_ids if dev_ids is not None else {}
+        # HV stacks report their own daily energy in the battery data.
+        self.battery = battery
         self.states: dict[str, BatteryEnergyState] = {}
         self.errors: dict[str, str | None] = {}
         self._query_by: dict[str, str] = {}  # sn -> id that returned samples
@@ -510,7 +569,11 @@ class HanchuessBatteryEnergyCoordinator(DataUpdateCoordinator):
         language = self.hass.config.language or "en"
         for attempt in range(2):
             try:
-                results = [await self._update_battery(serial, language) for serial in serials]
+                results = [
+                    self._update_from_stack(serial)
+                    or await self._update_battery(serial, language)
+                    for serial in serials
+                ]
                 break
             except _TokenExpired:
                 if attempt == 0 and await _try_refresh(
@@ -524,6 +587,39 @@ class HanchuessBatteryEnergyCoordinator(DataUpdateCoordinator):
         ):
             raise UpdateFailed("Failed to read battery minute data")
         return self._snapshot()
+
+    def _update_from_stack(self, serial: str) -> bool:
+        """Use an HV stack's own Charge/Discharge Today (#78).
+
+        The minute chart doesn't cover HV stacks, but the rack data carries
+        todayCharge and todayDischarge. Today is the stack's figure; Total
+        adds each increase, and the whole new figure after the cloud resets
+        it at midnight.
+        """
+        data = ((self.battery.data or {}) if self.battery else {}).get(serial) or {}
+        if not data.get("hvStack"):
+            return False
+        try:
+            charge = float(data["todayCharge"])
+            discharge = float(data["todayDischarge"])
+        except (KeyError, TypeError, ValueError):
+            return False
+        state = self.states.setdefault(serial, BatteryEnergyState())
+        for raw, today_attr, total_attr in (
+            (charge, "charge_today", "charge_total"),
+            (discharge, "discharge_today", "discharge_total"),
+        ):
+            previous = getattr(state, today_attr) if state.last_ts is not None else 0.0
+            added = raw - previous if raw >= previous else raw
+            setattr(state, total_attr, getattr(state, total_attr) + added)
+            setattr(state, today_attr, raw)
+        state.day = dt_util.now().date().isoformat()
+        try:
+            state.last_ts = int(data.get("dataTimeTs"))
+        except (TypeError, ValueError):
+            state.last_ts = int(dt_util.utcnow().timestamp() * 1000)
+        self.errors[serial] = None
+        return True
 
     async def async_save_now(self) -> None:
         """Write the totals straight away (on unload, so a reload starts from them)."""

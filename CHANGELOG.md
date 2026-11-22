@@ -10,6 +10,36 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.11.0] - 2026-11-22
+
+Support for **Home-ESS-HV high-voltage battery stacks** (#78), tested by the
+reporter on a HESS-HY-T-12K with a Home-ESS-HV-5.12K stack.
+
+### Added
+- **HV stack readings**: for a battery without per-module detail (the cloud
+  answers `90060 Not Found Data!`), the stack's own readings from
+  `rack/queryRackDataDivisions` (the web console's Battery Analysis page)
+  fill the existing battery sensors: voltage, current, power, SOC, SOH, full
+  and remaining capacity, design capacity, max/min cell voltage and
+  difference, temperature (stack average) and firmware. The battery's
+  serial, then its devId, is tried, and the one that works is remembered;
+  a battery that answers neither isn't asked again until restart, so LV
+  batteries cost at most one call. Diagnostics show `source: "rack"`.
+- **Charge/Discharge Today and Total for HV stacks**, from the stack's own
+  daily figures (the minute chart doesn't cover HV stacks). Total adds each
+  increase, carrying on across the cloud's midnight reset, and suits the
+  Energy dashboard.
+
+### Changed
+- A battery without per-module detail on an inverter install now falls
+  back to the SOC, SOH, model, online status and firmware the station list
+  carries, as battery-only stations already did. The station list is only
+  read when a battery needs it, so installs whose batteries already work
+  make no extra calls.
+- HV stacks don't get the LV pack sensors they can't fill (Battery
+  Temperature 1-4, Environment and MOS Temperature). Any created by the
+  betas can be deleted from the entity settings.
+
 ## [2.10.1] - 2026-11-22
 
 Fix for HESS-HY-T three-phase systems with ESS-HV batteries (#76), tested by

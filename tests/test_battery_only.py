@@ -252,10 +252,28 @@ def _coordinator(hass, client, mode="battery_only", serials=("B1", "B2"), option
     return HanchuessBatteryCoordinator(hass, entry, client)
 
 
-def _poll_client(station, by_id):
+# HV stack (#78): queryBatteryDataDivisions has no per-module data.
+HV_NOT_FOUND = {"code": 100, "msg": "90060 Not Found Data!", "success": False}
+
+# rack/queryRackDataDivisions for a Home-ESS-HV-5.12K stack (from #78, trimmed).
+RACK_OK = {"code": 200, "success": True, "data": {
+    "rackTotalV": "475.3", "rackTotalA": "-4.8", "rackCapFull": 100.0,
+    "rackCapRemain": 70.0, "rackSoc": 70.1, "rackSoh": "100.0", "rackCapacity": "46.1",
+    "maxCellV": "3.303", "minCellV": "3.295", "maxCellVDiff": "0.008",
+    "packAvgT": "19.2", "rackSoftVer": "HOME-ESS-HV-5.12_BCU_2.55",
+    "onlineStatus": "1", "dataTimeTs": 1795379366161, "rackPwr": "-2281.4",
+    "todayCharge": "19.90", "todayDischarge": "8.80", "packNum": 9,
+    "pack1V": "52.741", "packList": [{"packSn": "P1"}],
+}}
+
+
+def _poll_client(station, by_id, rack_by_id=None):
     client = MagicMock()
     client.async_get_station_detail = AsyncMock(return_value=station)
     client.async_get_battery_data = AsyncMock(side_effect=lambda dev_id, lang="en": by_id.get(dev_id, EMPTY))
+    client.async_get_rack_data = AsyncMock(
+        side_effect=lambda sn, lang="en": (rack_by_id or {}).get(sn, HV_NOT_FOUND)
+    )
     return client
 
 
@@ -294,14 +312,35 @@ async def test_missing_detail_falls_back_to_station_soc(hass: HomeAssistant):
     assert status["error"] == "code=100 msg=device not found"
 
 
-async def test_normal_mode_does_not_read_station_each_poll(hass: HomeAssistant):
+async def test_normal_mode_does_not_read_station_when_batteries_work(hass: HomeAssistant):
+    client = _poll_client({}, {"B1": DETAIL_OK, "B2": DETAIL_OK})
+    coordinator = _coordinator(hass, client, mode=None)
+    await coordinator._async_update_data()
+    client.async_get_station_detail.assert_not_called()
+
+
+async def test_normal_mode_without_station_values_leaves_battery_out(hass: HomeAssistant):
     client = _poll_client({}, {"B1": DETAIL_OK, "B2": EMPTY})
     coordinator = _coordinator(hass, client, mode=None)
     data = await coordinator._async_update_data()
-    client.async_get_station_detail.assert_not_called()
     assert "B2" not in data
     assert coordinator.battery_status["B2"] == {
         "queried_by": "sn", "dev_id_differs": False, "ok": False, "source": None, "error": "empty data"}
+
+
+
+
+async def test_normal_mode_hv_stack_falls_back_to_station_values(hass: HomeAssistant):
+    station = _station([HANCHU_PCS], [{**_bms("B1", soc=76.5), "devId": "B1"}])
+    client = _poll_client(station, {"B1": HV_NOT_FOUND})
+    coordinator = _coordinator(hass, client, mode=None, serials=("B1",))
+    data = await coordinator._async_update_data()  # no UpdateFailed: SOC is there
+    assert data["B1"]["socPack"] == 76.5
+    assert "vPack" not in data["B1"]
+    client.async_get_station_detail.assert_awaited_once()
+    status = coordinator.battery_status["B1"]
+    assert status["source"] == "station" and status["ok"] is True
+    assert status["error"] == "code=100 msg=90060 Not Found Data!"
 
 
 async def test_battery_only_polls_every_minute_by_default(hass: HomeAssistant):
@@ -393,8 +432,10 @@ async def test_normal_setup_continues_when_battery_detail_is_empty(hass: HomeAss
     client.async_get_device_statistics = AsyncMock(return_value={"load": 1})
     client.async_get_menu = AsyncMock(return_value={"code": 200, "data": {}})
     client.async_iot_get = AsyncMock(return_value={})
+    # Setup reads the station once; the battery fallback's read finds nothing
+    # (e.g. the station call fails too), so there is no battery data at all.
     client.async_get_station_detail = AsyncMock(
-        return_value=_station([HANCHU_PCS], [{**_bms("B1"), "devId": "B1"}])
+        side_effect=[_station([HANCHU_PCS], [{**_bms("B1"), "devId": "B1"}]), {}]
     )
     client.async_get_battery_data = AsyncMock(return_value=EMPTY)
     hass.data.setdefault(DOMAIN, {})["_client"] = client
@@ -408,3 +449,104 @@ async def test_normal_setup_continues_when_battery_detail_is_empty(hass: HomeAss
     assert battery.data == {}  # battery sensors can be set up, and show unavailable
     assert battery.last_update_success is False
     assert entry.runtime_data.realtime.last_update_success is True
+
+
+
+async def test_hv_stack_reads_rack_data(hass: HomeAssistant):
+    station = _station([HANCHU_PCS], [{**_bms("B1", soc=70.0), "devId": "D1"}])
+    client = _poll_client(station, {"B1": HV_NOT_FOUND, "D1": HV_NOT_FOUND}, {"D1": RACK_OK})
+    coordinator = _coordinator(hass, client, mode=None, serials=("B1",))
+    coordinator.dev_ids["B1"] = "D1"
+    data = await coordinator._async_update_data()
+    b1 = data["B1"]
+    assert (b1["vPack"], b1["iPack"], b1["socPack"], b1["sohPack"]) == ("475.3", "-4.8", 70.1, "100.0")
+    assert (b1["capFull"], b1["capRemain"], b1["designCapacity"]) == (100.0, 70.0, "46.1")
+    assert (b1["maxVoltage"], b1["minVoltage"], b1["maxVoltageDifference"]) == ("3.303", "3.295", "0.008")
+    assert b1["todayCharge"] == "19.90" and b1["devModel"] == "3"  # station model kept
+    assert "packList" not in b1 and "pack1V" not in b1
+    status = coordinator.battery_status["B1"]
+    assert status["source"] == "rack" and status["rack_queried_by"] == "devId"
+    tried = [c.args[0] for c in client.async_get_rack_data.await_args_list]
+    assert tried == ["B1", "D1"]
+
+    # Next poll goes straight to the ID that worked.
+    client.async_get_rack_data.reset_mock()
+    await coordinator._async_update_data()
+    assert [c.args[0] for c in client.async_get_rack_data.await_args_list] == ["D1"]
+
+
+async def test_lv_battery_not_asked_for_rack_data_again(hass: HomeAssistant):
+    station = _station([HANCHU_PCS], [{**_bms("B1"), "devId": "B1"}])
+    client = _poll_client(station, {"B1": EMPTY})
+    coordinator = _coordinator(hass, client, mode=None, serials=("B1",))
+    await coordinator._async_update_data()
+    assert client.async_get_rack_data.await_count == 1
+    await coordinator._async_update_data()
+    assert client.async_get_rack_data.await_count == 1  # remembered: not a stack
+
+
+def test_hv_rack_power_and_remaining_energy():
+    from custom_components.hanchuess.battery import rack_battery_values
+    from custom_components.hanchuess.sensor import battery_power_w
+
+    values = rack_battery_values(RACK_OK["data"])
+    assert battery_power_w(values) == round(475.3 * -4.8, 1)  # matches rackPwr -2281.4
+
+
+async def test_api_rack_payload():
+    from custom_components.hanchuess.api import HanchuessApiClient
+    from custom_components.hanchuess.crypto import _encrypt_payload
+
+    client = HanchuessApiClient.__new__(HanchuessApiClient)
+    client._request = AsyncMock(return_value={"code": 200, "data": {}})
+    await client.async_get_rack_data("R1", "en")
+    path, payload = client._request.await_args.args[:2]
+    assert path == "/gateway/platform/rack/queryRackDataDivisions"
+    assert payload == _encrypt_payload({"sn": "R1", "type": "1"})
+
+
+async def test_hv_stack_energy_from_its_own_daily_figures(hass: HomeAssistant):
+    from custom_components.hanchuess.coordinator import HanchuessBatteryEnergyCoordinator
+
+    entry = MockConfigEntry(domain=DOMAIN, data={"sn": "SN1", "battery_serials": ["B1"]})
+    entry.add_to_hass(hass)
+    battery = MagicMock()
+    battery.data = {"B1": {"hvStack": True, "todayCharge": "19.90", "todayDischarge": "8.80",
+                           "dataTimeTs": 1795379366161}}
+    client = MagicMock()
+    client.async_get_battery_minute_chart = AsyncMock()
+    energy = HanchuessBatteryEnergyCoordinator(hass, entry, client, {}, battery)
+
+    data = await energy._async_update_data()
+    assert (data["B1"]["charge_today"], data["B1"]["charge_total"]) == (19.9, 19.9)
+    assert (data["B1"]["discharge_today"], data["B1"]["discharge_total"]) == (8.8, 8.8)
+    client.async_get_battery_minute_chart.assert_not_called()  # no minute chart for a stack
+
+    battery.data["B1"].update(todayCharge="21.40", todayDischarge="8.80")
+    data = await energy._async_update_data()
+    assert data["B1"]["charge_total"] == pytest.approx(21.4)  # +1.5
+    assert data["B1"]["discharge_total"] == pytest.approx(8.8)  # unchanged
+
+    # Midnight: the cloud resets today's figures; Total keeps counting.
+    battery.data["B1"].update(todayCharge="0.30", todayDischarge="0.10")
+    data = await energy._async_update_data()
+    assert data["B1"]["charge_today"] == 0.3
+    assert data["B1"]["charge_total"] == pytest.approx(21.7)
+    assert data["B1"]["discharge_total"] == pytest.approx(8.9)
+
+
+def test_hv_stack_skips_lv_only_sensors():
+    from custom_components.hanchuess.battery import rack_battery_values
+    from custom_components.hanchuess.sensor import BatterySensor, _battery_entities
+
+    battery = MagicMock()
+    battery.data = {"B1": {**rack_battery_values(RACK_OK["data"]), "devModel": "3"}}
+    entry = SimpleNamespace(
+        data={"battery_serials": ["B1"]},
+        runtime_data=SimpleNamespace(inverter_device_id="d", energy=None),
+    )
+    keys = {e._sensor_key for e in _battery_entities(entry, battery) if isinstance(e, BatterySensor)}
+    assert not any(k.startswith("battery_temperature_") and k[-1].isdigit() for k in keys)
+    assert "battery_voltage" in keys and "battery_soc_pack" in keys
+    configs = {e._config.get("key") for e in _battery_entities(entry, battery) if isinstance(e, BatterySensor)}
+    assert "tEnv" not in configs and "tMos" not in configs and "tPack" in configs
