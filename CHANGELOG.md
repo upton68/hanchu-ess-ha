@@ -10,43 +10,35 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
-## [2.11.0-beta.3] - 2026-11-22
+## [2.11.0] - 2026-11-22
+
+Support for **Home-ESS-HV high-voltage battery stacks** (#78), tested by the
+reporter on a HESS-HY-T-12K with a Home-ESS-HV-5.12K stack.
 
 ### Added
-- **Charge/Discharge Today and Total for HV stacks** (#78): taken from the
-  stack's own daily figures (`todayCharge`/`todayDischarge`), as the minute
-  chart doesn't cover HV stacks. Total adds each increase, and the new day's
-  figure after the cloud resets at midnight.
+- **HV stack readings**: for a battery without per-module detail (the cloud
+  answers `90060 Not Found Data!`), the stack's own readings from
+  `rack/queryRackDataDivisions` (the web console's Battery Analysis page)
+  fill the existing battery sensors: voltage, current, power, SOC, SOH, full
+  and remaining capacity, design capacity, max/min cell voltage and
+  difference, temperature (stack average) and firmware. The battery's
+  serial, then its devId, is tried, and the one that works is remembered;
+  a battery that answers neither isn't asked again until restart, so LV
+  batteries cost at most one call. Diagnostics show `source: "rack"`.
+- **Charge/Discharge Today and Total for HV stacks**, from the stack's own
+  daily figures (the minute chart doesn't cover HV stacks). Total adds each
+  increase, carrying on across the cloud's midnight reset, and suits the
+  Energy dashboard.
 
 ### Changed
-- HV stacks no longer get the LV pack sensors they can't fill (Battery
-  Temperature 1-4, Environment and MOS Temperature). Ones created by
-  beta.2 can be deleted from the entity settings.
-
-## [2.11.0-beta.2] - 2026-11-22
-
-### Added
-- **High-voltage battery stacks** (Home-ESS-HV, #78): the stack's own
-  readings from `rack/queryRackDataDivisions` (the web console's Battery
-  Analysis page) fill the existing battery sensors: voltage, current, power,
-  SOC, SOH, full and remaining capacity, design capacity, max/min cell
-  voltage and difference, temperature and firmware. Tried only for a battery
-  whose per-module detail fails; it tries the battery's serial, then its
-  devId, and remembers which works. A battery that answers neither isn't
-  asked again until restart. Diagnostics show `source: "rack"` and which ID
-  was used.
-
-## [2.11.0-beta.1] - 2026-11-22
-
-Beta for #78 (Home-ESS-HV high-voltage battery stacks).
-
-### Changed
-- Batteries without per-module detail, such as Home-ESS-HV high-voltage
-  stacks (the cloud answers `90060 Not Found Data!`), now show the SOC, SOH,
-  model, online status and firmware the station list carries, on inverter
-  installs as well as battery-only ones. The station list is only read when
-  a battery needs it, so installs whose batteries already work make no
-  extra calls (#78).
+- A battery without per-module detail on an inverter install now falls
+  back to the SOC, SOH, model, online status and firmware the station list
+  carries, as battery-only stations already did. The station list is only
+  read when a battery needs it, so installs whose batteries already work
+  make no extra calls.
+- HV stacks don't get the LV pack sensors they can't fill (Battery
+  Temperature 1-4, Environment and MOS Temperature). Any created by the
+  betas can be deleted from the entity settings.
 
 ## [2.10.1] - 2026-11-22
 
