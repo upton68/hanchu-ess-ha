@@ -355,6 +355,9 @@ The Hanchu app only shows the weather SOCs while Weather Optimize is on. SOC
 changes saved from Home Assistant while it's off are stored, but won't appear
 in the app until it's turned on and the app is refreshed.
 
+The [Weather Optimize and Octopus cards](#weather-optimize-and-octopus) show
+these settings laid out as in the app.
+
 > **Moving from a home-made REST setup:** if you previously controlled these
 > strategies with your own REST sensors, scripts or automations, disable them
 > before using these entities. Two writers to the same records can overwrite
@@ -534,17 +537,58 @@ Based on the original work by [guoxiatech](https://github.com/guoxiatech/hanchu-
 API reverse engineering and extended entity support by upton68.
 Significant ongoing contributions — unit fixes, diagnostics, options flow, release automation, directional power sensors, and battery unit support — by [lancedfr](https://github.com/lancedfr).
 
-## Custom Lovelace Card
-The integration auto-registers a custom card **Hanchuess Remote Settings** which
-can be found under **Custom cards** when adding a card to your dashboard.
+## Cards
+The integration ships three Lovelace cards and registers them as dashboard
+resources automatically. They're under **Custom cards** when you add a card to
+a dashboard.
 
-The card provides:
+If you can't find a card, clear your browser cache and refresh the page, or
+restart Home Assistant. If your dashboard resources are managed in YAML, add
+them yourself as JavaScript modules:
+`/hanchuess_card/hanchuess-energy-card.js`,
+`/hanchuess_card/hanchuess-weather-card.js` and
+`/hanchuess_card/hanchuess-octopus-card.js`.
+
+### Hanchuess Remote Settings
 
 - SN display at the top
 - Fast Charge/Discharge — Select mode (charge/discharge), set duration, confirm or stop with real-time countdown
 - Energy Settings — Load and configure work mode, charge/discharge time periods, SOC limits, and other parameters from the device menu
 
-Note: If you cannot find the Hanchuess card when adding to dashboard, please clear your browser cache and refresh the page, or restart Home Assistant.
+### Weather Optimize and Octopus
+
+Two cards that show the [Weather Optimize and Octopus
+strategies](#weather-optimize-and-octopus-strategies) the way the Hanchu app
+does. The only setting is the inverter's serial number, which the card editor
+lets you pick:
+
+```yaml
+type: custom:hanchuess-weather-card
+sn: YOUR_INVERTER_SN
+```
+
+```yaml
+type: custom:hanchuess-octopus-card
+sn: YOUR_INVERTER_SN
+```
+
+![Weather Optimize and Octopus cards](docs/images/strategy-cards.png)
+
+- **Weather Optimize**: on/off, charge start and end (**+1** when the end is
+  on the next day), the SOC for each of the 11 weather conditions (editable
+  only while Weather Optimize is on, as in the app), Strategy Priority and Save.
+- **Electricity Price Strategy (Octopus)**: on/off, schema type, then in
+  Point settings the two windows with their switch and slot count (and how
+  many hours that is), or in Price settings the Charging and Discharge Price
+  with their switch and threshold; country, postcode, Strategy Priority and
+  Save.
+
+The cards are built on the strategy entities: a change on a card stages it
+like changing the entity would, and **Save** presses the strategy's Save
+button, so the save works exactly as described above. The cards show how many
+changes are waiting to be saved, and the error if a save fails (the changes
+stay staged). Enable the strategy's entities first; a card lists any that are
+still disabled.
 
 ## License
 MIT License

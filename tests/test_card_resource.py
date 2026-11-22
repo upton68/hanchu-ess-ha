@@ -15,7 +15,16 @@ import pytest
 
 pytest.importorskip("homeassistant")
 
-from custom_components.hanchuess import CARD_URL, _async_register_card_resource
+from custom_components.hanchuess import (
+    CARD_FILES,
+    CARD_URL,
+    CARD_URLS,
+    OCTOPUS_CARD_FILE,
+    WEATHER_CARD_FILE,
+    _async_register_card_resource,
+)
+
+ALL_CARD_URLS = [CARD_URLS[card_file] for card_file in CARD_FILES]
 
 OTHER_RESOURCES = [
     {"id": "a", "type": "module", "url": "/hacsfiles/apexcharts-card/apexcharts-card.js"},
@@ -71,7 +80,7 @@ async def test_unloaded_collection_keeps_existing_resources():
     await _async_register_card_resource(_make_hass(resources))
 
     urls = [r["url"] for r in resources.stored]
-    assert urls == [r["url"] for r in OTHER_RESOURCES] + [CARD_URL]
+    assert urls == [r["url"] for r in OTHER_RESOURCES] + ALL_CARD_URLS
 
 
 async def test_card_already_registered_is_not_duplicated():
@@ -80,8 +89,9 @@ async def test_card_already_registered_is_not_duplicated():
 
     await _async_register_card_resource(_make_hass(resources))
 
-    assert [r["url"] for r in resources.stored].count(CARD_URL) == 1
-    assert len(resources.stored) == 3
+    urls = [r["url"] for r in resources.stored]
+    assert urls.count(CARD_URL) == 1
+    assert urls == [r["url"] for r in OTHER_RESOURCES] + ALL_CARD_URLS
 
 
 async def test_yaml_mode_is_left_alone():
@@ -116,9 +126,65 @@ async def test_old_card_url_is_updated_in_place(old_url):
     await _async_register_card_resource(_make_hass(resources))
 
     urls = [r["url"] for r in resources.stored]
-    assert urls == [r["url"] for r in OTHER_RESOURCES] + [CARD_URL]
+    assert urls == [r["url"] for r in OTHER_RESOURCES] + ALL_CARD_URLS
 
 
 async def test_card_url_is_not_under_hacsfiles():
     assert not CARD_URL.startswith("/hacsfiles/")
     assert CARD_URL.startswith("/hanchuess_card/hanchuess-energy-card.js?v=")
+
+
+# --- Weather Optimize and Octopus cards (issue #74) ------------------------------
+
+
+async def test_strategy_cards_are_registered_without_touching_other_resources():
+    resources = _LazyResources(OTHER_RESOURCES)
+
+    await _async_register_card_resource(_make_hass(resources))
+
+    assert resources.stored[:2] == OTHER_RESOURCES
+    urls = [r["url"] for r in resources.stored]
+    for card_file in (WEATHER_CARD_FILE, OCTOPUS_CARD_FILE):
+        assert urls.count(CARD_URLS[card_file]) == 1
+    assert all(r["type"] == "module" for r in resources.stored[2:])
+
+
+async def test_registration_is_idempotent():
+    resources = _LazyResources(OTHER_RESOURCES)
+
+    await _async_register_card_resource(_make_hass(resources))
+    first = [dict(r) for r in resources.stored]
+    await _async_register_card_resource(_make_hass(resources))
+
+    assert resources.stored == first
+    assert len(resources.stored) == len(OTHER_RESOURCES) + len(CARD_FILES)
+
+
+@pytest.mark.parametrize("card_file", [WEATHER_CARD_FILE, OCTOPUS_CARD_FILE])
+async def test_old_strategy_card_version_is_updated_in_place(card_file):
+    old_url = f"/hanchuess_card/{card_file}?v=0.0.1"
+    stored = OTHER_RESOURCES + [{"id": "c", "type": "module", "url": old_url}]
+    resources = _LazyResources(stored)
+
+    await _async_register_card_resource(_make_hass(resources))
+
+    urls = [r["url"] for r in resources.stored]
+    assert old_url not in urls
+    assert urls.count(CARD_URLS[card_file]) == 1
+    assert len(urls) == len(OTHER_RESOURCES) + len(CARD_FILES)
+
+
+def test_strategy_card_urls_are_versioned_and_served_with_the_energy_card():
+    for card_file in (WEATHER_CARD_FILE, OCTOPUS_CARD_FILE):
+        assert CARD_URLS[card_file].startswith(f"/hanchuess_card/{card_file}?v=")
+        assert CARD_URLS[card_file].split("?v=")[1] == CARD_URL.split("?v=")[1]
+
+
+def test_card_files_ship_with_the_integration():
+    import os
+
+    import custom_components.hanchuess as integration
+
+    www = os.path.join(os.path.dirname(integration.__file__), "www")
+    for card_file in (*CARD_FILES, "hanchuess-strategy-common.js"):
+        assert os.path.isfile(os.path.join(www, card_file)), card_file
