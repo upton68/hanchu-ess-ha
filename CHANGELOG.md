@@ -10,9 +10,10 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
-## [2.10.1-beta.1] - 2026-11-22
+## [2.10.1] - 2026-11-22
 
-Beta for #76 (HESS-HY-T three-phase systems).
+Fix for HESS-HY-T three-phase systems with ESS-HV batteries (#76), tested by
+the reporter on 2.10.1-beta.1.
 
 ### Fixed
 - Since 2.6.0, the whole integration failed to load (retrying setup
