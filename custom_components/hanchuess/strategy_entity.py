@@ -338,3 +338,31 @@ def strategy_buttons(entry):
         HanchuessStrategySaveButton(coordinator, entry, kind, key, name)
         for kind, key, name in SAVE_BUTTONS
     ]
+
+
+# The Pending Changes sensor (sensor.py); the cards read its per-strategy
+# counts. Its unique-id suffix predates the strategies.
+PENDING_CHANGES_KEY = "pending_changes"
+PENDING_CHANGES_SUFFIX = "pending_settings_changes"
+
+
+def card_entity_keys() -> dict[str, tuple[str, str]]:
+    """key -> (platform, unique-id suffix) for every entity the strategy cards use.
+
+    The keys are the unique-id suffixes above, so they survive entity renames
+    (and the pre-rename ``octopus_charge`` / ``octopus_discharge`` entity ids).
+    """
+    keys: dict[str, tuple[str, str]] = {}
+    for platform, specs in (
+        ("switch", SWITCHES),
+        ("time", TIMES),
+        ("number", NUMBERS),
+        ("select", SELECTS),
+        ("text", TEXTS),
+    ):
+        for spec in specs:
+            keys[spec.key] = (platform, spec.key)
+    for _kind, key, _name in SAVE_BUTTONS:
+        keys[key] = ("button", key)
+    keys[PENDING_CHANGES_KEY] = ("sensor", PENDING_CHANGES_SUFFIX)
+    return keys

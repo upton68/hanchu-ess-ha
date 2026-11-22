@@ -10,6 +10,19 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Added
+- **Weather Optimize and Octopus cards** (`custom:hanchuess-weather-card` and
+  `custom:hanchuess-octopus-card`), laid out like the Hanchu app's Weather
+  Optimize and Electricity Price Strategy screens. Built on the 2.9.0
+  strategy entities: changes are staged through the normal entity services
+  and sent with the strategy's Save button. They show unsaved changes, save
+  errors, disabled entities and strategies never saved in the app, in English
+  and Simplified Chinese. Shipped with the integration and registered as
+  dashboard resources automatically, like the energy card. (#74)
+- `hanchuess/strategy_entities` WebSocket command, which returns the strategy
+  entities' ids for an inverter by unique id, so renamed entities are found.
+  (#74)
+
 ## [2.9.0] - 2026-11-21
 
 ### Added

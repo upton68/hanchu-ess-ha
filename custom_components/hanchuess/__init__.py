@@ -6,10 +6,11 @@ import asyncio
 from dataclasses import dataclass
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
-from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse, callback
 from homeassistant.components import websocket_api
 from homeassistant.exceptions import ConfigEntryNotReady
 import homeassistant.helpers.device_registry as dr
+import homeassistant.helpers.entity_registry as er
 import homeassistant.helpers.config_validation as cv
 from .const import (
     DOMAIN,
@@ -37,6 +38,7 @@ from .coordinator import (
     energy_store_key,
 )
 from .staging import SettingsStagingBuffer
+from .strategy_entity import card_entity_keys
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,7 +68,18 @@ def _manifest_version() -> str:
         return "0"
 
 
-CARD_URL = f"{CARD_URL_BASE}/{CARD_FILE}?v={_manifest_version()}"
+def _card_url(card_file: str) -> str:
+    return f"{CARD_URL_BASE}/{card_file}?v={_manifest_version()}"
+
+
+CARD_URL = _card_url(CARD_FILE)
+
+# Weather Optimize and Octopus cards (issue #74). Both import
+# hanchuess-strategy-common.js from the same folder, which is not a resource.
+WEATHER_CARD_FILE = "hanchuess-weather-card.js"
+OCTOPUS_CARD_FILE = "hanchuess-octopus-card.js"
+CARD_FILES = (CARD_FILE, WEATHER_CARD_FILE, OCTOPUS_CARD_FILE)
+CARD_URLS = {card_file: _card_url(card_file) for card_file in CARD_FILES}
 
 
 @dataclass
@@ -351,6 +364,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     websocket_api.async_register_command(hass, ws_iot_set)
     websocket_api.async_register_command(hass, ws_fast_charge)
     websocket_api.async_register_command(hass, ws_clear_staging)
+    websocket_api.async_register_command(hass, ws_strategy_entities)
 
     async def handle_device_control(call: ServiceCall):
         return await async_device_control_service(hass, call)
@@ -560,38 +574,86 @@ async def ws_clear_staging(hass, connection, msg):
     connection.send_result(msg["id"], {})
 
 
+@websocket_api.websocket_command({
+    vol.Required("type"): "hanchuess/strategy_entities",
+    vol.Required("sn"): str,
+})
+@callback
+def ws_strategy_entities(hass, connection, msg):
+    """Entity ids for the Weather Optimize and Octopus cards (issue #74).
+
+    Looked up in the entity registry by unique id, so renamed entities and
+    older installs' entity ids are found. Returns
+    ``{"entities": {key: {"entity_id", "disabled"}}}``; an entity that isn't
+    in the registry is left out.
+    """
+    inverter_serial_number = msg["sn"]
+    entry = next(
+        (
+            e for e in hass.config_entries.async_entries(DOMAIN)
+            if e.data.get("sn") == inverter_serial_number and not is_battery_only(e)
+        ),
+        None,
+    )
+    if entry is None:
+        connection.send_error(
+            msg["id"], "not_found", f"Device {inverter_serial_number} not found"
+        )
+        return
+    registry = er.async_get(hass)
+    entities = {}
+    for key, (platform, suffix) in card_entity_keys().items():
+        entity_id = registry.async_get_entity_id(
+            platform, DOMAIN, f"{inverter_serial_number}_{suffix}"
+        )
+        if entity_id is None:
+            continue
+        reg_entry = registry.async_get(entity_id)
+        entities[key] = {
+            "entity_id": entity_id,
+            "disabled": bool(reg_entry is not None and reg_entry.disabled_by is not None),
+        }
+    connection.send_result(msg["id"], {"entities": entities})
+
+
 async def _async_register_card_resource(hass: HomeAssistant) -> None:
-    """Add the energy card to the Lovelace resources if it isn't there already.
+    """Add the cards to the Lovelace resources if they aren't there already.
 
     The storage-mode resource collection is loaded lazily, and this can run
     during startup before anything else has touched it. Until it is loaded,
-    async_items() returns an empty list, so the card looks missing; on older
-    HA versions async_create_item() would then save a one-item list over
+    async_items() returns an empty list, so the cards look missing; on older
+    HA versions async_create_item() would then save a short list over
     .storage/lovelace_resources, wiping every other resource (issue #41).
     async_get_info() is the public method HA uses to force that load, so
-    call it before reading or changing the collection.
+    call it before reading or changing the collection. Only the cards' own
+    entries are ever created or updated.
     """
     lovelace_data = hass.data.get("lovelace")
     if not lovelace_data or lovelace_data.resource_mode != "storage":
         return
     resources = lovelace_data.resources
     await resources.async_get_info()  # forces the lazy load from storage
+    for card_file in CARD_FILES:
+        await _async_register_one_card(resources, card_file, CARD_URLS[card_file])
+
+
+async def _async_register_one_card(resources, card_file: str, card_url: str) -> None:
     existing = [
-        r for r in resources.async_items() if CARD_FILE in r.get("url", "")
+        r for r in resources.async_items() if card_file in r.get("url", "")
     ]
     if not existing:
-        await resources.async_create_item({"res_type": "module", "url": CARD_URL})
-        _LOGGER.info("[HANCHUESS] Card resource auto-registered")
+        await resources.async_create_item({"res_type": "module", "url": card_url})
+        _LOGGER.info("[HANCHUESS] Card resource auto-registered: %s", card_file)
         return
     # Point an old entry (e.g. /hacsfiles/..., or a URL rewritten by the
     # HACS-to-Marketplace migration) or an older version at the current URL.
     for item in existing:
-        if item.get("url") != CARD_URL:
+        if item.get("url") != card_url:
             await resources.async_update_item(
-                item["id"], {"res_type": "module", "url": CARD_URL}
+                item["id"], {"res_type": "module", "url": card_url}
             )
             _LOGGER.info(
-                "[HANCHUESS] Card resource updated: %s -> %s", item.get("url"), CARD_URL
+                "[HANCHUESS] Card resource updated: %s -> %s", item.get("url"), card_url
             )
 
 
