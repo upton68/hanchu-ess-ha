@@ -10,6 +10,8 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.10.0] - 2026-11-22
+
 ### Added
 - **Weather Optimize and Octopus cards** (`custom:hanchuess-weather-card` and
   `custom:hanchuess-octopus-card`), laid out like the Hanchu app's Weather
@@ -617,7 +619,8 @@ act on it straight away must now call `hanchuess.write_settings` after the write
 - Initial fork of the original integration with read-only battery, grid, PV, and
   load sensors and the custom Lovelace card.
 
-[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.9.0...HEAD
+[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.10.0...HEAD
+[2.10.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.9.0...v2.10.0
 [2.9.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.8.0...v2.9.0
 [2.8.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.7.0...v2.8.0
 [2.7.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.6.0...v2.7.0
