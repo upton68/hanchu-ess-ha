@@ -10,6 +10,17 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.11.1] - 2026-11-23
+
+Tested by the reporter on 2.11.1-beta.1 (LuxPower inverter with 4 Hanchu
+batteries).
+
+### Fixed
+- Battery-only setup (Hanchu batteries with a LuxPower or other
+  third-party inverter) failed with "Could not load station details" when
+  the Hanchu account also lists the third-party inverter as an inverter.
+  Choosing it now goes on to the station's batteries instead.
+
 ### Documentation
 - **Octopus strategy warning** in the README: it picks slots from Agile
   prices whatever your tariff, and changes to the window switches and slot

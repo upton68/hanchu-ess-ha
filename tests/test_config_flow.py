@@ -877,3 +877,53 @@ async def test_user_flow_inverter_already_configured_aborts(hass: HomeAssistant)
         patcher.stop()
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "already_configured"
+
+
+
+@pytest.mark.parametrize("placeholder_has_station", [False, True])
+async def test_lux_listed_as_inverter_falls_back_to_battery_station(
+    hass: HomeAssistant, placeholder_has_station
+):
+    """A LuxPower inverter can show in the device list as an inverter.
+
+    Without a Hanchu station behind it, setup used to stop with "Could not
+    load station details". It now offers the station's batteries.
+    """
+    patcher, client = _patched_client(
+        devices=[{"sn": "LUXDUMMY", "devType": "2"}], stations=STATIONS
+    )
+    client.async_get_device_status = AsyncMock(
+        return_value={"stationId": "ST1"} if placeholder_has_station else {}
+    )
+    client.async_get_station_detail = AsyncMock(
+        return_value=_station([LUX_PLACEHOLDER], SIX_BATTERIES)
+    )
+    try:
+        result = await _login(hass)
+        assert result["step_id"] == "select_device"
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"devices": ["LUXDUMMY"]}
+        )
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "battery_station"
+        with patch("custom_components.hanchuess.async_setup_entry", return_value=True):
+            created = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+            await hass.async_block_till_done()
+    finally:
+        patcher.stop()
+    assert created["type"] == FlowResultType.CREATE_ENTRY
+    assert created["data"]["mode"] == "battery_only"
+    assert created["data"]["battery_serials"] == [b["sn"] for b in SIX_BATTERIES]
+
+
+async def test_real_inverter_without_station_still_reports_error(hass: HomeAssistant):
+    patcher, client = _patched_client(devices=[{"sn": "SN1", "devType": "2"}], stations=[])
+    client.async_get_device_status = AsyncMock(return_value={})
+    try:
+        result = await _login(hass)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"devices": ["SN1"]}
+        )
+    finally:
+        patcher.stop()
+    assert result["errors"] == {"base": "station_lookup_failed"}
