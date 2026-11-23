@@ -30,7 +30,7 @@ from .const import (
     DEFAULT_HISTORY_INTERVAL,
     MIN_HISTORY_INTERVAL,
 )
-from .battery import battery_only_serials, extract_battery_serials
+from .battery import battery_only_serials, extract_battery_serials, has_hanchu_inverter
 from .api import HanchuessApiClient
 
 _LOGGER = logging.getLogger(__name__)
@@ -221,6 +221,11 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     inverter_serial_number, language
                 )
                 station_id = device_status.get("stationId")
+                if not station_id and await self._discover_battery_stations():
+                    # A third-party inverter (e.g. LuxPower) can be listed on
+                    # the account as an inverter, with no Hanchu station
+                    # behind it: offer the station's batteries instead.
+                    return await self.async_step_battery_station()
                 if not station_id:
                     errors["base"] = "station_lookup_failed"
                     return self.async_show_form(
@@ -232,6 +237,14 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     )
 
                 station_detail = await client.async_get_station_detail(station_id, language)
+                pcs_list = ((station_detail or {}).get("data") or {}).get("pcsList") or []
+                if (
+                    pcs_list
+                    and not has_hanchu_inverter(station_detail)
+                    and await self._discover_battery_stations()
+                ):
+                    # The station's only inverters are third-party placeholders.
+                    return await self.async_step_battery_station()
                 if not station_detail:
                     errors["base"] = "battery_lookup_failed"
                     return self.async_show_form(
