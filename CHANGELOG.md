@@ -10,7 +10,10 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
-## [2.11.1-beta.1] - 2026-11-23
+## [2.11.1] - 2026-11-23
+
+Tested by the reporter on 2.11.1-beta.1 (LuxPower inverter with 4 Hanchu
+batteries).
 
 ### Fixed
 - Battery-only setup (Hanchu batteries with a LuxPower or other
