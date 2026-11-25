@@ -137,7 +137,8 @@ async def test_user_flow_no_devices(hass: HomeAssistant):
             result["flow_id"], {"account": "a", "password": "p"}
         )
         assert result2["type"] == FlowResultType.FORM
-        assert result2["errors"] == {"base": "no_devices"}
+        # Nothing listed: ask for the inverter serial instead of giving up.
+        assert result2["step_id"] == "manual_serial"
     finally:
         patcher.stop()
 
@@ -665,7 +666,7 @@ async def test_flow_skips_station_with_hanchu_inverter(hass: HomeAssistant):
     finally:
         patcher.stop()
     assert result["type"] == FlowResultType.FORM
-    assert result["errors"] == {"base": "no_devices"}
+    assert result["step_id"] == "manual_serial"
 
 
 async def test_flow_skips_already_configured_station(hass: HomeAssistant):
@@ -676,7 +677,7 @@ async def test_flow_skips_already_configured_station(hass: HomeAssistant):
         result = await _login(hass)
     finally:
         patcher.stop()
-    assert result["errors"] == {"base": "no_devices"}
+    assert result["step_id"] == "manual_serial"
     client.async_get_station_detail.assert_not_called()
 
 
@@ -927,3 +928,28 @@ async def test_real_inverter_without_station_still_reports_error(hass: HomeAssis
     finally:
         patcher.stop()
     assert result["errors"] == {"base": "station_lookup_failed"}
+
+
+
+async def test_manual_serial_sets_up_the_inverter(hass: HomeAssistant):
+    """Account lists no devices: the serial entered by hand is checked and used."""
+    patcher, client = _patched_client(devices=[], stations=[])
+    client.async_get_device_status = AsyncMock(
+        side_effect=lambda sn, lang="en": {"stationId": "ST1"} if sn == "H0157156P0170" else {}
+    )
+    try:
+        result = await _login(hass)
+        assert result["step_id"] == "manual_serial"
+        bad = await hass.config_entries.flow.async_configure(result["flow_id"], {"sn": "NOPE"})
+        assert bad["errors"] == {"base": "manual_serial_invalid"}
+        with patch("custom_components.hanchuess.async_setup_entry", return_value=True):
+            done = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"sn": " h0157156p0170 "}
+            )
+            await hass.async_block_till_done()
+    finally:
+        patcher.stop()
+    assert done["type"] == FlowResultType.CREATE_ENTRY
+    assert done["data"]["sn"] == "H0157156P0170"
+    assert done["data"]["stationId"] == "ST1"
+    assert done["data"]["dev_type"] == "2"

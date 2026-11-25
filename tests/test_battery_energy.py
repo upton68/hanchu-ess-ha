@@ -483,3 +483,23 @@ def test_minute_chart_timeselected_label():
     }
     client._hass = SimpleNamespace(config=SimpleNamespace(time_zone="America/Bogota"))
     assert client._minute_chart_header_sets()[0]["timeselected"] == "GMT-05:00"
+
+
+
+@pytest.mark.parametrize("data,expected", [
+    ({"loadPwr": 1696.2, "loadEpsPwr": 1.7, "loadEpsPwrUnit": "kW"}, 1696.2),  # agree: W kept
+    ({"loadPwr": 0, "loadEpsPwr": 1.43, "loadEpsPwrUnit": "kW"}, 1430.0),  # model 29
+    ({"loadPwr": "0.0", "loadEpsPwr": "0.85", "loadEpsPwrUnit": "kW"}, 850.0),
+    ({"loadEpsPwr": 2.1, "loadEpsPwrUnit": "kW"}, 2100.0),  # loadPwr absent
+    ({"loadPwr": 0, "loadEpsPwr": 0, "loadEpsPwrUnit": "kW"}, 0),  # truly nothing
+    ({"loadPwr": 0}, 0),
+    ({}, None),
+])
+def test_load_power_falls_back_to_eps(data, expected):
+    from custom_components.hanchuess.sensor import SENSORS, HanchueSensor
+
+    coordinator = MagicMock()
+    coordinator.data = data
+    entry = SimpleNamespace(data={"sn": "SN1"}, runtime_data=SimpleNamespace(inverter_model=None))
+    sensor = HanchueSensor(coordinator, entry, "load_power", SENSORS["load_power"])
+    assert sensor.native_value == expected
