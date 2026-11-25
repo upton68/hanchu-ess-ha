@@ -91,6 +91,10 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     # Everything on the account is already set up: say so
                     # rather than "no devices found" (#76).
                     return self.async_abort(reason="already_configured")
+                if not self._devices:
+                    # The account lists no devices at all (seen on some
+                    # models): let the user enter the inverter serial.
+                    return await self.async_step_manual_serial()
                 errors["base"] = "no_devices"
             else:
                 errors["base"] = "auth_failed"
@@ -193,6 +197,27 @@ class HanchuessConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if self._account and self._password:
             return {"account": self._account, "password": self._password}
         return {}
+
+    async def async_step_manual_serial(self, user_input=None):
+        """Enter the inverter serial when the account's device list is empty."""
+        errors = {}
+        if user_input is not None:
+            serial = str(user_input.get("sn", "")).strip().upper()
+            client = self._client or HanchuessApiClient(self.hass, BASE_URL, token=self._token)
+            self._client = client
+            language = self.hass.config.language or "en"
+            status = await client.async_get_device_status(serial, language) if serial else {}
+            if serial and status.get("stationId"):
+                # A real inverter: carry on as if the account had listed it.
+                if not any(d.get("sn") == serial for d in self._devices):
+                    self._devices.append({"sn": serial, "devType": "2"})
+                return await self.async_step_select_device({"devices": [serial]})
+            errors["base"] = "manual_serial_invalid"
+        return self.async_show_form(
+            step_id="manual_serial",
+            data_schema=vol.Schema({vol.Required("sn"): str}),
+            errors=errors,
+        )
 
     async def async_step_select_device(self, user_input=None):
         """Step 2: Select devices (multi-select)."""

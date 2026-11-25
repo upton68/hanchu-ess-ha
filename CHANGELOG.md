@@ -10,6 +10,19 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Added
+- **Manual inverter serial**: if the Hanchu account lists no devices at all,
+  setup now asks for the inverter's serial number, checks it with the cloud
+  and carries on as normal, instead of stopping with "No Hanchu inverters or
+  batteries found". Idea from a community fork's work on the
+  HESS-HY-S-12K-S.
+
+### Fixed
+- **Load Power** falls back to `loadEpsPwr` when `loadPwr` is missing or 0
+  while `loadEpsPwr` isn't. Seen on the HESS-HY-S-12K-S, which reports the
+  load only there. Where both are filled (all other models seen so far) they
+  agree, and `loadPwr` stays in use as it's the more precise.
+
 ## [2.11.1] - 2026-11-23
 
 Tested by the reporter on 2.11.1-beta.1 (LuxPower inverter with 4 Hanchu
