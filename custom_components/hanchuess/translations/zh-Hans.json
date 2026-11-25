@@ -9,6 +9,13 @@
           "password": "密码"
         }
       },
+      "manual_serial": {
+        "title": "输入逆变器序列号",
+        "description": "您的汉储账户中没有列出任何设备。请输入逆变器序列号（可在汉储 App 或逆变器标签上找到）以完成设置。",
+        "data": {
+          "sn": "逆变器序列号"
+        }
+      },
       "select_device": {
         "title": "选择设备",
         "description": "选择要添加的设备（可多选）",
@@ -42,6 +49,7 @@
       "auth_failed": "授权失败，请检查账号信息",
       "wrong_account": "该账号下没有此条目对应的逆变器或电站",
       "cannot_connect": "无法连接到服务器",
+      "manual_serial_invalid": "该序列号未被识别为您汉储账户下的逆变器。请在汉储 App 中核对后重试。",
       "no_devices": "该账号下未找到 Hanchu 逆变器或电池",
       "station_lookup_failed": "无法加载站点详情",
       "battery_lookup_failed": "无法加载电池详情。如果您从未登录过 Hanchu 网页控制台，请先在 {console_url} 登录一次并退出，然后重试。"

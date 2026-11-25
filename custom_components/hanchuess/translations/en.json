@@ -9,6 +9,13 @@
           "password": "Password"
         }
       },
+      "manual_serial": {
+        "title": "Enter Inverter Serial",
+        "description": "Your Hanchu account didn't list any devices. Enter your inverter's serial number (as shown in the Hanchu app or on the inverter's label) to set it up.",
+        "data": {
+          "sn": "Inverter serial number"
+        }
+      },
       "select_device": {
         "title": "Select Devices",
         "description": "Choose the devices you want to add",
@@ -42,6 +49,7 @@
       "auth_failed": "Authentication failed, please check your credentials",
       "wrong_account": "This account does not have the inverter or station this entry was set up for",
       "cannot_connect": "Cannot connect to server",
+      "manual_serial_invalid": "That serial wasn't recognised as an inverter on your Hanchu account. Check it in the Hanchu app and try again.",
       "no_devices": "No Hanchu inverters or batteries found under this account",
       "station_lookup_failed": "Could not load station details",
       "battery_lookup_failed": "Could not load battery details. If you have never logged into the Hanchu web console, log in once at {console_url}, log out, then try again."

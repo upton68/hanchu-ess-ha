@@ -177,7 +177,7 @@ async def async_flush_staged(hass: HomeAssistant, entry) -> bool:
 
     result = await client.async_device_control(inverter_serial_number, "2", snapshot)
     if result.get("success"):
-        staging.clear()
+        staging.discard_written(snapshot)
         _note_written(entry, snapshot)
         _LOGGER.info("[HANCHUESS] Write Settings succeeded for %s", inverter_serial_number)
         return True
@@ -191,7 +191,7 @@ async def async_flush_staged(hass: HomeAssistant, entry) -> bool:
     await _asyncio.sleep(5)
     result = await client.async_device_control(inverter_serial_number, "2", snapshot)
     if result.get("success"):
-        staging.clear()
+        staging.discard_written(snapshot)
         _note_written(entry, snapshot)
         _LOGGER.info("[HANCHUESS] Write Settings retry succeeded for %s", inverter_serial_number)
         return True

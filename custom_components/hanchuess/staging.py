@@ -18,7 +18,7 @@ class SettingsStagingBuffer:
         buf.set_on_change(lambda: sensor.async_write_ha_state())
         buf.stage("CHG_PWR_LMT", 2000)   # from a number entity
         payload = buf.snapshot()          # pass to async_device_control
-        buf.clear()                       # after successful flush
+        buf.discard_written(payload)      # after a successful flush
     """
 
     def __init__(self) -> None:
@@ -46,6 +46,20 @@ class SettingsStagingBuffer:
         """Remove all pending settings.  Triggers on_change."""
         self.pending.clear()
         self._notify()
+
+    def discard_written(self, written: dict) -> None:
+        """Remove settings that were just written, if they haven't changed since.
+
+        A value staged while the write was in flight is newer than what was
+        sent, so it stays pending for the next write (#84).
+        """
+        removed = False
+        for key, value in written.items():
+            if key in self.pending and self.pending[key] == value:
+                del self.pending[key]
+                removed = True
+        if removed:
+            self._notify()
 
     def discard(self, keys) -> None:
         """Remove specific pending settings (e.g. superseded by a direct write).

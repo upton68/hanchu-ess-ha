@@ -444,14 +444,12 @@ def test_time_slot_missing_value_defaults_to_midnight():
     assert slot.native_value == dt_time(0, 0)
 
 
-async def test_time_slot_encodes_time_to_seconds_on_send(monkeypatch):
-    monkeypatch.setattr(time_mod, "DEBOUNCE_SECONDS", 0)
+async def test_time_slot_encodes_time_to_seconds_on_send():
     slot = _make_slot({})
     slot.hass = MagicMock()
     slot.async_write_ha_state = MagicMock()
-    slot._pending_value = dt_time(2, 30)  # 9000 seconds
 
-    await slot._send_after_delay()
+    await slot.async_set_value(dt_time(2, 30))  # 9000 seconds
 
     # Under staged writes, value goes into staging buffer, not direct API call.
     assert slot._entry.runtime_data.staging.pending == {"TCT_START_1": 9000}
@@ -463,6 +461,26 @@ async def test_time_slot_encodes_time_to_seconds_on_send(monkeypatch):
 # ---------------------------------------------------------------------------
 
 from custom_components.hanchuess.staging import SettingsStagingBuffer
+
+
+def test_staging_discard_written_keeps_newer_values():
+    """#84: only what was written is removed; changes staged mid-write stay."""
+    buf = SettingsStagingBuffer()
+    calls = []
+    buf.set_on_change(lambda: calls.append(1))
+    buf.stage("TCT_START_1", 3600)
+    buf.stage("CHG_PWR_LMT", 2000)
+    sent = buf.snapshot()
+    # While the write is in flight: one key changes, another is added.
+    buf.stage("CHG_PWR_LMT", 2500)
+    buf.stage("TDT_START_3", 0)
+    calls.clear()
+    buf.discard_written(sent)
+    assert buf.pending == {"CHG_PWR_LMT": 2500, "TDT_START_3": 0}
+    assert calls == [1]
+    calls.clear()
+    buf.discard_written({"NOT_STAGED": 1})
+    assert calls == []  # nothing removed, no notification
 
 
 def test_staging_stage_adds_entry():
@@ -669,31 +687,30 @@ async def test_select_unknown_option_does_not_stage():
 
 # -- HanchuessTimeSlot staging --
 
-async def test_time_slot_stages_value_after_debounce(monkeypatch):
-    import custom_components.hanchuess.time as time_mod2
-    monkeypatch.setattr(time_mod2, "DEBOUNCE_SECONDS", 0)
+async def test_time_slot_stages_value_immediately():
+    """#84: staged at once, so a Write Settings pressed straight after includes it."""
     entry = _FakeEntryWithStaging()
     slot = _make_time_slot_v2(entry=entry)
     slot.hass = MagicMock()
     slot.async_write_ha_state = MagicMock()
 
-    slot._pending_value = dt_time(2, 30)  # 9000 seconds
-    await slot._send_after_delay()
+    await slot.async_set_value(dt_time(2, 30))  # 9000 seconds
 
     assert entry.runtime_data.staging.pending == {"TCT_START_1": 9000}
+    assert slot.native_value == dt_time(2, 30)
+
+    await slot.async_set_value(dt_time(3, 0))  # a second change replaces the first
+    assert entry.runtime_data.staging.pending == {"TCT_START_1": 10800}
 
 
-async def test_time_slot_does_not_call_async_device_control(monkeypatch):
-    import custom_components.hanchuess.time as time_mod2
-    monkeypatch.setattr(time_mod2, "DEBOUNCE_SECONDS", 0)
+async def test_time_slot_does_not_call_async_device_control():
     entry = _FakeEntryWithStaging()
     slot = _make_time_slot_v2(entry=entry)
     slot.hass = MagicMock()
     slot.async_write_ha_state = MagicMock()
     client = AsyncMock()
 
-    slot._pending_value = dt_time(1, 0)
-    await slot._send_after_delay()
+    await slot.async_set_value(dt_time(1, 0))
 
     client.async_device_control.assert_not_awaited()
 

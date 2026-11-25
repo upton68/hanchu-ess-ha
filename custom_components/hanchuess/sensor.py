@@ -117,6 +117,11 @@ SENSORS = {
     },
     "load_power": {
         "key": "loadPwr",
+        # Some models (e.g. HESS-HY-S-12K-S) leave loadPwr at 0 and report the
+        # load only as loadEpsPwr (kW). Elsewhere the two agree, and loadPwr
+        # (W) is the more precise, so it stays first.
+        "fallback_key": "loadEpsPwr",
+        "fallback_unit_key": "loadEpsPwrUnit",
         "device_class": SensorDeviceClass.POWER,
         "state_class": SensorStateClass.MEASUREMENT,
         "unit": UnitOfPower.WATT,
@@ -814,6 +819,9 @@ class HanchueSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         value = self.coordinator.data.get(self._config["key"])
+        fallback = self._fallback_watts(value)
+        if fallback is not None:
+            return fallback
         if value is None:
             return None
         if self._config.get("auto_watt"):
@@ -830,6 +838,23 @@ class HanchueSensor(CoordinatorEntity, SensorEntity):
         if derive_mode:
             return _derive_directional_power(value, derive_mode)
         return value
+
+
+    def _fallback_watts(self, value):
+        """The fallback field in W, when the main field is missing or 0 and it isn't."""
+        fallback_key = self._config.get("fallback_key")
+        if not fallback_key:
+            return None
+        try:
+            if value is not None and float(value) != 0:
+                return None
+        except (TypeError, ValueError):
+            pass
+        alt = _scale_auto_watt(
+            self.coordinator.data.get(fallback_key),
+            self.coordinator.data.get(self._config.get("fallback_unit_key")),
+        )
+        return alt if alt else None
 
 
 class BatterySensor(CoordinatorEntity, SensorEntity):
