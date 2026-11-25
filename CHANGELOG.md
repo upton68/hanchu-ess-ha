@@ -10,6 +10,16 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+### Fixed
+- Time slot changes could be lost when Write Settings was pressed within
+  2 seconds of changing a slot, as an automation does: the time was staged
+  2 s late, and a successful write cleared the whole staging buffer,
+  including anything staged while the write was in flight. HA then showed
+  the new time while the inverter kept the old one. Time slots now stage
+  straight away, and a write only removes the settings it actually sent;
+  anything changed mid-write stays pending for the next write (#84, reported
+  with fixes by lancedfr).
+
 ## [2.11.1] - 2026-11-23
 
 Tested by the reporter on 2.11.1-beta.1 (LuxPower inverter with 4 Hanchu

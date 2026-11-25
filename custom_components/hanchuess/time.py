@@ -1,5 +1,4 @@
 """Time platform for Hanchuess - Charge and discharge time slot controls."""
-import asyncio
 import logging
 from datetime import time
 from homeassistant.components.time import TimeEntity
@@ -14,7 +13,6 @@ from .strategy_entity import strategy_times
 
 _LOGGER = logging.getLogger(__name__)
 
-DEBOUNCE_SECONDS = 2
 
 TIME_SLOTS = {
     "charge_slot_1_start": {
@@ -121,8 +119,6 @@ class HanchuessTimeSlot(TimeEntity):
         inverter_serial_number = entry.data["sn"]
         self._attr_unique_id = f"{inverter_serial_number}_{slot_key}"
         self._attr_icon = config["icon"]
-        self._debounce_task = None
-        self._pending_value = None
         self._attr_native_value = _decode_time_value(
             startup_values.get(config["control_key"])
         )
@@ -146,32 +142,19 @@ class HanchuessTimeSlot(TimeEntity):
         self._attr_native_value = _decode_time_value(raw)
 
     async def async_set_value(self, value: time) -> None:
-        """Debounce time slot changes to coalesce rapid adjustments into one stage call."""
-        self._pending_value = value
+        """Stage the new slot time straight away.
+
+        Nothing reaches the inverter until Write Settings, and the staging
+        buffer keeps only the latest value per key, so rapid changes already
+        coalesce. Staging late (the old 2 s debounce) let a Write Settings
+        pressed straight after miss the change (#84).
+        """
+        seconds = (value.hour * 3600) + (value.minute * 60)
+        self._entry.runtime_data.staging.stage(self._config["control_key"], seconds)
         self._attr_native_value = value
         self.async_write_ha_state()
-
-        if self._debounce_task:
-            self._debounce_task.cancel()
-
-        self._debounce_task = asyncio.ensure_future(self._send_after_delay())
-
-    async def _send_after_delay(self) -> None:
-        """Wait for debounce period then stage the value."""
-        try:
-            await asyncio.sleep(DEBOUNCE_SECONDS)
-            value = self._pending_value
-            if value is None:
-                return
-            seconds = (value.hour * 3600) + (value.minute * 60)
-            self._entry.runtime_data.staging.stage(
-                self._config["control_key"], seconds
-            )
-            _LOGGER.info(
-                "[HANCHUESS] %s staged: %s seconds (pending write)",
-                self._config["name"],
-                seconds,
-            )
-            self._pending_value = None
-        except asyncio.CancelledError:
-            pass
+        _LOGGER.info(
+            "[HANCHUESS] %s staged: %s seconds (pending write)",
+            self._config["name"],
+            seconds,
+        )
