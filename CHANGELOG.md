@@ -704,7 +704,8 @@ act on it straight away must now call `hanchuess.write_settings` after the write
 - Initial fork of the original integration with read-only battery, grid, PV, and
   load sensors and the custom Lovelace card.
 
-[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.11.1...HEAD
+[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.12.0...HEAD
+[2.12.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.11.1...v2.12.0
 [2.11.1]: https://github.com/upton68/hanchu-ess-ha/compare/v2.11.0...v2.11.1
 [2.11.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.10.1...v2.11.0
 [2.10.1]: https://github.com/upton68/hanchu-ess-ha/compare/v2.10.0...v2.10.1
