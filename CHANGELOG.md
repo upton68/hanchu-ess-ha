@@ -10,7 +10,10 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
-## [2.11.2-beta.1] - 2026-11-24
+## [2.12.1] - 2026-11-26
+
+Tested by the reporter on 2.11.2-beta.1 (four 3.2 kWh packs with a LuxPower
+inverter).
 
 ### Fixed
 - **Battery State** now follows the direction of the battery's current,
@@ -18,6 +21,29 @@ later versions are tracked here going forward.
   change (seen on four 3.2 kWh packs with a LuxPower inverter: all
   discharging, but shown as Idle, Charging, Discharging and Charging).
   `stateBat` is still used when there is no current reading.
+
+## [2.12.0] - 2026-11-25
+
+### Added
+- **Manual inverter serial**: if the Hanchu account lists no devices at all,
+  setup now asks for the inverter's serial number, checks it with the cloud
+  and carries on as normal, instead of stopping with "No Hanchu inverters or
+  batteries found". Idea from a community fork's work on the
+  HESS-HY-S-12K-S.
+
+### Fixed
+- Time slot changes could be lost when Write Settings was pressed within
+  2 seconds of changing a slot, as an automation does: the time was staged
+  2 s late, and a successful write cleared the whole staging buffer,
+  including anything staged while the write was in flight. HA then showed
+  the new time while the inverter kept the old one. Time slots now stage
+  straight away, and a write only removes the settings it actually sent;
+  anything changed mid-write stays pending for the next write (#84, reported
+  with fixes by lancedfr).
+- **Load Power** falls back to `loadEpsPwr` when `loadPwr` is missing or 0
+  while `loadEpsPwr` isn't. Seen on the HESS-HY-S-12K-S, which reports the
+  load only there. Where both are filled (all other models seen so far) they
+  agree, and `loadPwr` stays in use as it's the more precise.
 
 ## [2.11.1] - 2026-11-23
 
@@ -690,7 +716,8 @@ act on it straight away must now call `hanchuess.write_settings` after the write
 - Initial fork of the original integration with read-only battery, grid, PV, and
   load sensors and the custom Lovelace card.
 
-[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.11.1...HEAD
+[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.12.0...HEAD
+[2.12.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.11.1...v2.12.0
 [2.11.1]: https://github.com/upton68/hanchu-ess-ha/compare/v2.11.0...v2.11.1
 [2.11.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.10.1...v2.11.0
 [2.10.1]: https://github.com/upton68/hanchu-ess-ha/compare/v2.10.0...v2.10.1

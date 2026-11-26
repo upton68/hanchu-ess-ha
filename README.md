@@ -226,6 +226,11 @@ redacted from diagnostics files.
 
 ### First-time setup
 
+If your Hanchu account doesn't list any devices (this happens on some
+models), setup asks for your **inverter's serial number** instead. You can
+find it in the Hanchu app or on the inverter's label. It's checked with the
+Hanchu cloud, and setup then carries on as normal.
+
 If your account has never been used on the Hanchu web console, the setup flow
 finds your inverter but then fails with **"Could not load battery details"**.
 The Hanchu cloud doesn't enable battery/station access for an account until it

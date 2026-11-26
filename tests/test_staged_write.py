@@ -84,7 +84,6 @@ async def test_multiple_entity_changes_accumulate_in_buffer():
 
 async def test_staging_three_entity_types():
     """Number, select, and time slot all accumulate in the same buffer."""
-    import custom_components.hanchuess.time as time_mod
     entry = _make_entry()
     number = _make_number_entity(entry, "DSCHG_PWR_LMT")
     sel = _make_select_entity(entry)
@@ -93,14 +92,7 @@ async def test_staging_three_entity_types():
     await number.async_set_native_value(1500.0)
     await sel.async_select_option("User-defined")
 
-    # Simulate debounce completing
-    slot._pending_value = dt_time(6, 0)  # 21600 seconds
-    original_debounce = time_mod.DEBOUNCE_SECONDS
-    time_mod.DEBOUNCE_SECONDS = 0
-    try:
-        await slot._send_after_delay()
-    finally:
-        time_mod.DEBOUNCE_SECONDS = original_debounce
+    await slot.async_set_value(dt_time(6, 0))  # 21600 seconds
 
     assert entry.runtime_data.staging.pending == {
         "DSCHG_PWR_LMT": 1500,
@@ -353,3 +345,58 @@ def test_all_control_keys_covers_all_time_slot_entities():
 
 def test_all_control_keys_includes_work_mode():
     assert "WORK_MODE_CMB" in ALL_CONTROL_KEYS
+
+
+# ---------------------------------------------------------------------------
+# #84: a change staged while a write is in flight isn't lost
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("fail_first", [False, True])
+async def test_change_staged_during_write_stays_pending(fail_first):
+    entry = _make_entry()
+    staging = entry.runtime_data.staging
+    staging.stage("TCT_START_1", 3600)
+    staging.stage("CHG_PWR_LMT", 2000)
+    attempts = []
+
+    async def device_control(sn, dev_type, payload):
+        attempts.append(dict(payload))
+        if len(attempts) == 1:
+            # An automation changes a slot time and the power limit mid-write.
+            staging.stage("TDT_START_3", 0)
+            staging.stage("CHG_PWR_LMT", 2500)
+            if fail_first:
+                return {"success": False, "msg": "busy"}
+        return {"success": True}
+
+    client = MagicMock()
+    client.async_device_control = AsyncMock(side_effect=device_control)
+    entry.runtime_data.realtime.client = client
+    from custom_components.hanchuess import async_flush_staged
+
+    with patch("asyncio.sleep", AsyncMock()):
+        assert await async_flush_staged(MagicMock(), entry) is True
+
+    sent = attempts[-1]
+    # What was sent is gone; what changed or arrived mid-write is still pending.
+    assert "TCT_START_1" not in staging.pending
+    assert staging.pending["TDT_START_3"] == 0
+    assert staging.pending["CHG_PWR_LMT"] == 2500
+    assert sent["CHG_PWR_LMT"] == 2000
+
+
+async def test_time_change_then_immediate_write_includes_it():
+    """#84 steps to reproduce: set a slot time, press Write Settings at once."""
+    client = MagicMock()
+    client.async_device_control = AsyncMock(return_value={"success": True})
+    entry = _make_entry(client=client)
+    slot = _make_time_entity(entry, "discharge_slot_3_start")
+    slot.hass = MagicMock()
+    slot.async_write_ha_state = MagicMock()
+
+    await slot.async_set_value(dt_time(0, 0))
+    from custom_components.hanchuess import async_flush_staged
+
+    assert await async_flush_staged(MagicMock(), entry) is True
+    client.async_device_control.assert_awaited_once_with("SN1", "2", {"TDT_START_3": 0})
+    assert entry.runtime_data.staging.pending == {}
