@@ -10,6 +10,18 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.12.1] - 2026-11-26
+
+Tested by the reporter on 2.11.2-beta.1 (four 3.2 kWh packs with a LuxPower
+inverter).
+
+### Fixed
+- **Battery State** now follows the direction of the battery's current,
+  which is always live. Some batteries report a `stateBat` that doesn't
+  change (seen on four 3.2 kWh packs with a LuxPower inverter: all
+  discharging, but shown as Idle, Charging, Discharging and Charging).
+  `stateBat` is still used when there is no current reading.
+
 ## [2.12.0] - 2026-11-25
 
 ### Added

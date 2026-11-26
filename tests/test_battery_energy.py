@@ -349,11 +349,20 @@ def test_energy_sensor_unknown_until_first_sample_and_zero_on_new_day():
 
 
 @pytest.mark.parametrize("data,expected", [
+    # The current's direction decides.
+    ({"iPack": "12.5"}, "charging"), ({"iPack": "-3"}, "discharging"),
+    ({"iPack": "0.00"}, "idle"), ({"iPack": "0.05"}, "idle"),
+    # ...even when stateBat says otherwise (Matthew's LuxPower packs: all four
+    # discharging at about -1.5 A, stateBat 0/1/2/1).
+    ({"iPack": "-1.51", "stateBat": 0}, "discharging"),
+    ({"iPack": "-1.54", "stateBat": 1}, "discharging"),
+    ({"iPack": "-1.55", "stateBat": 2}, "discharging"),
+    ({"iPack": "35.78", "stateBat": 1}, "charging"),  # Dean's packs: both agree
+    # No current (station-list fallback): stateBat.
     ({"stateBat": "0"}, "idle"), ({"stateBat": 1}, "charging"),
     ({"stateBat": "2"}, "discharging"), ({"stateBat": "9"}, None),
-    # No stateBat: fall back to the current's direction.
-    ({"iPack": "12.5"}, "charging"), ({"iPack": "-3"}, "discharging"),
-    ({"iPack": "0.00"}, "idle"), ({"stateBat": "x"}, None), ({}, None),
+    ({"iPack": "x", "stateBat": 2}, "discharging"),
+    ({"stateBat": "x"}, None), ({}, None),
 ])
 def test_battery_state_sensor(data, expected):
     entry = _sensor_entry(None)

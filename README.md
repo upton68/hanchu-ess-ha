@@ -450,7 +450,8 @@ battery-only stations:
 | Discharge Total | never | **Energy dashboard** (*Battery systems → Energy coming out*) |
 
 There is also a **Battery State** sensor per battery (Idle, Charging or
-Discharging), as the battery itself reports it.
+Discharging), from the direction of the battery's current (idle below 0.1 A
+either way).
 
 The cloud doesn't report per-battery energy directly, so the integration works
 it out from each battery's minute-by-minute voltage and current

@@ -950,6 +950,9 @@ BATTERY_ENERGY_SENSORS = {
     "battery_discharge_total": {"field": "discharge_total", "icon": "mdi:battery-arrow-down-outline"},
 }
 
+# Below this current (A) either way a battery counts as idle.
+BATTERY_IDLE_CURRENT = 0.1
+
 # stateBat from the battery data.
 BATTERY_STATES = {0: "idle", 1: "charging", 2: "discharging"}
 
@@ -1006,20 +1009,24 @@ class BatteryStateSensor(BatterySensor):
     @property
     def native_value(self):
         battery_data = (self.coordinator.data or {}).get(self._battery_serial) or {}
-        try:
-            return BATTERY_STATES.get(int(battery_data.get("stateBat")))
-        except (TypeError, ValueError):
-            pass
-        # No stateBat in this payload: go by the current's direction.
+        # Go by the direction of the current: it is always live, whereas
+        # stateBat can be stuck (seen on model-1 packs with a LuxPower
+        # inverter: four packs all discharging, stateBat 0/1/2/1).
         try:
             current = float(battery_data.get("iPack"))
         except (TypeError, ValueError):
+            current = None
+        if current is not None:
+            if current > BATTERY_IDLE_CURRENT:
+                return "charging"
+            if current < -BATTERY_IDLE_CURRENT:
+                return "discharging"
+            return "idle"
+        # No current reading (e.g. station-list fallback): use stateBat.
+        try:
+            return BATTERY_STATES.get(int(battery_data.get("stateBat")))
+        except (TypeError, ValueError):
             return None
-        if current > 0.1:
-            return "charging"
-        if current < -0.1:
-            return "discharging"
-        return "idle"
 
 
 # Station energy for this month, this year and in total (console Statistics).
