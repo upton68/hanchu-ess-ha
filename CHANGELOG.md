@@ -10,6 +10,19 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.13.0] - 2026-11-27
+
+### Changed
+- **`hanchuess.device_control` and the energy card's Set button are now
+  admin-only.** Both can send any setting to the inverter. Automations and
+  scripts (including Predbat) are unaffected. Non-admin users see Set
+  disabled with an explanation, and can still use the settings entities,
+  Write Settings, fast charge, and the Octopus and Weather Optimize cards.
+
+### Security
+- The `hanchuess/iot_set` WebSocket command, used by the energy card,
+  requires an administrator.
+
 ## [2.12.2] - 2026-11-27
 
 Changes requested in the review for inclusion in the Home Assistant
@@ -736,7 +749,8 @@ act on it straight away must now call `hanchuess.write_settings` after the write
 - Initial fork of the original integration with read-only battery, grid, PV, and
   load sensors and the custom Lovelace card.
 
-[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.12.2...HEAD
+[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.13.0...HEAD
+[2.13.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.12.2...v2.13.0
 [2.12.2]: https://github.com/upton68/hanchu-ess-ha/compare/v2.12.1...v2.12.2
 [2.12.1]: https://github.com/upton68/hanchu-ess-ha/compare/v2.12.0...v2.12.1
 [2.12.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.11.1...v2.12.0
