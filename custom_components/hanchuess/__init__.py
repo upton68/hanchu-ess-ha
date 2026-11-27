@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse, callback
-from homeassistant.components import websocket_api
+from homeassistant.components import persistent_notification, websocket_api
 from homeassistant.exceptions import ConfigEntryNotReady
 import homeassistant.helpers.device_registry as dr
 import homeassistant.helpers.entity_registry as er
@@ -203,7 +203,8 @@ async def async_flush_staged(hass: HomeAssistant, entry) -> bool:
         result.get("msg"),
     )
     try:
-        hass.components.persistent_notification.async_create(
+        persistent_notification.async_create(
+            hass,
             title="Hanchuess — Write Settings Failed",
             message=(
                 f"Could not write settings to inverter **{inverter_serial_number}** after two attempts.\n\n"

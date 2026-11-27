@@ -1,3 +1,9 @@
+// HTML-escapes values interpolated into innerHTML. Same version query as this
+// file, so an update fetches the new shared code.
+const { esc } = await import(
+  new URL(`./hanchuess-strategy-common.js${new URL(import.meta.url).search}`, import.meta.url).href
+);
+
 // ===== icons =====
 const HANCHUESS_ICONS = {
   charging: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAACE4AAAhOAFFljFgAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAOdEVYdFNvZnR3YXJlAEZpZ21hnrGWYwAAAqlJREFUeAHtmk9y0zAUxj/FKcMyRwg3iE+Au2QYUjgB4QicgHAC4ATACdKU6RrfwL5BzQnwkhkahOTOtE5tSe/Jkrrpb+FF/GT7WZ/eHznAIw+LAJdqtwCy1/QBWY38ZY1I8B2o91dq2JIzBFKcIn9VIgIzlnV1uWI/fGR4DuCaIZ1bmlhvX8NzQIjnYDMrERG6A9VuqY4FuEj5HRFhzEBWgE9U+WjoDghxBjZx5dPdgW4qC3CJLB8NzYHqR6GOC/CILh8NcQb+eYTP+PLp7kKyEuDrP4F8NO5SQodPkV2BR4PV+hkSQJgBn/CZRj7dnZwWAm/BJZF8NHYJ6dJZZL/BI5l8NHP7aR/5yBbVxYZg2AInqld40WACdgd8og/ESo37SrP926jDpNlyrAGP7JsYswMpmhd5coqJWGbAq3mhI/F+qv41Zge8mhciUn5Bvv6MAIw74Nu80GhUbbVFIAxRyKt5odB0us/XLQJhkFCk6BNI930MDogSoZHyo3rz5wgMf2OrT32hE9aGYFmq8mJyyBxjjkloqTnfgdb9O+PZm3rr090lsefMlL8DXZspl067btFada9b1U1vwC91IDvA3JnrQ2gzIyza+/g74Cr0AiYrG34OuOukJmSysuG5Bg6F5WTwZGXDzwGbfEy672ZttEA83m/SNVi13w7NRD0WnfgO2OqkLlmdGSLIQTU64gPcFMquGP48+4aR6OSxBox1UqkefovE8B0Y3+S1J6uI8CTUfeCTQx27k5XicA75tBz+fq02zuTPu2up8IsnI+H3z2hQYK6BEflQk1X+Rj/A8CGqnb5u/5eWk/yYn5juRZ9EycoGcw0c9QlNqmRlgy6h4+ItabKy4VdKJCjSqNBnQH9tqS5zJZtF4C8vrXohvRA8j/a3hEdi8B9eFcj5fjk7/gAAAABJRU5ErkJggg==",
@@ -133,14 +139,14 @@ class HanchuessEnergyCardEditor extends HTMLElement {
 
     this.innerHTML = `
       <div style="padding: 16px;">
-        <label style="font-weight:500;display:block;margin-bottom:8px;">${_t(this._hass, 'device')}</label>
+        <label style="font-weight:500;display:block;margin-bottom:8px;">${esc(_t(this._hass, 'device'))}</label>
         <select id="entity_select" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;">
-          <option value="">${_t(this._hass, 'select_device')}</option>
+          <option value="">${esc(_t(this._hass, 'select_device'))}</option>
           ${entities.map(eid => {
             const state = this._hass.states[eid];
             const name = (state.attributes.friendly_name || eid).replace(/ [Dd]evice [Ss]tatus| 设备状态/g, "");
             const selected = this._config.entity === eid ? "selected" : "";
-            return `<option value="${eid}" ${selected}>${name}</option>`;
+            return `<option value="${esc(eid)}" ${selected}>${esc(name)}</option>`;
           }).join("")}
         </select>
       </div>
@@ -733,8 +739,8 @@ class HanchuessEnergyCard extends HTMLElement {
 
     const options = (state.attributes.work_mode_options || []).map(opt => opt.label);
     if (select.options.length !== options.length + 1) {
-      select.innerHTML = `<option value="">${_t(this._hass, 'please_select')}</option>` +
-        options.map(opt => `<option value="${opt}">${opt}</option>`).join("");
+      select.innerHTML = `<option value="">${esc(_t(this._hass, 'please_select'))}</option>` +
+        options.map(opt => `<option value="${esc(opt)}">${esc(opt)}</option>`).join("");
     }
 
     const fields = state.attributes.energy_fields || [];
@@ -755,52 +761,58 @@ class HanchuessEnergyCard extends HTMLElement {
     container.dataset.renderedKey = fieldsKey;
 
     let html = "";
+    // Every value below comes from Device Status attributes (the Hanchu cloud
+    // menu), so it is escaped before going into innerHTML.
     for (const field of fields) {
       const la = field.listener_code
-        ? `data-listener-code="${field.listener_code}" data-listener-show="${field.listener_show}"`
+        ? `data-listener-code="${esc(field.listener_code)}" data-listener-show="${esc(field.listener_show)}"`
         : "";
       const cls = field.hidden || field.listener_code ? "dynamic-field" : "dynamic-field visible";
+      const fSignal = esc(field.signal);
+      const fName = esc(field.name);
+      const fCode = esc(field.code);
 
       if (field.type === "1") {
-        const min = field.min || "0", max = field.max || "99999";
-        const step = field.step || 1;
-        html += `<div class="${cls}" ${la} data-signal="${field.signal}"><div class="field"><label>${field.name}</label><input type="number" data-signal="${field.signal}" data-step="${step}" min="${min}" max="${max}" step="${step}" placeholder="[${min}, ${max}]"></div></div>`;
+        const min = esc(field.min || "0"), max = esc(field.max || "99999");
+        const step = esc(field.step || 1);
+        html += `<div class="${cls}" ${la} data-signal="${fSignal}"><div class="field"><label>${fName}</label><input type="number" data-signal="${fSignal}" data-step="${step}" min="${min}" max="${max}" step="${step}" placeholder="[${min}, ${max}]"></div></div>`;
       }
 
       if (field.type === "6") {
-        const sigs = (field.signal || "").split(",");
-        const code = field.code || "";
-        const gk = code.startsWith("chg_tim") ? "chg" : code.startsWith("dschg_tim") ? "dschg" : code;
-        const idx = (code.match(/(\d)$/) || [,"1"])[1];
-        const fmt = field.format || "";
-        html += `<div class="${cls}" ${la} data-signal="${field.signal}" data-time-group="${gk}" data-time-index="${idx}" data-time-fmt="${fmt}"><div class="time-row"><span class="time-label">${field.name}</span><input type="text" class="time-input" data-signal="${sigs[0]||""}" data-time-type="start" readonly><span>-</span><input type="text" class="time-input" data-signal="${sigs[1]||""}" data-time-type="end" readonly><button class="icon-btn del" data-action="del-time" data-group="${gk}" data-index="${idx}">🗑</button><button class="icon-btn add" data-action="add-time" data-group="${gk}" data-index="${idx}" style="display:none">+</button></div></div>`;
+        const sigs = String(field.signal || "").split(",").map(esc);
+        const code = String(field.code || "");
+        const gk = esc(code.startsWith("chg_tim") ? "chg" : code.startsWith("dschg_tim") ? "dschg" : code);
+        const idx = esc((code.match(/(\d)$/) || [,"1"])[1]);
+        const fmt = esc(field.format || "");
+        html += `<div class="${cls}" ${la} data-signal="${fSignal}" data-time-group="${gk}" data-time-index="${idx}" data-time-fmt="${fmt}"><div class="time-row"><span class="time-label">${fName}</span><input type="text" class="time-input" data-signal="${sigs[0]||""}" data-time-type="start" readonly><span>-</span><input type="text" class="time-input" data-signal="${sigs[1]||""}" data-time-type="end" readonly><button class="icon-btn del" data-action="del-time" data-group="${gk}" data-index="${idx}">🗑</button><button class="icon-btn add" data-action="add-time" data-group="${gk}" data-index="${idx}" style="display:none">+</button></div></div>`;
       }
 
       if (field.type === "collapse") {
         const children = field.children || [];
-        const sig = field.signal;
+        const sig = fSignal;
         // Determine time group for overlap detection from field code (e.g. TCT_CHG0 -> chg, TCT_DISCHG1 -> dschg)
         const collapseGroup = field.code && field.code.includes("DISCHG") ? "dschg" : field.code && field.code.includes("CHG") ? "chg" : "";
         let switchHtml = "";
         let bodyHtml = "";
         for (const c of children) {
-          const ci = c.index != null ? c.index : 0;
+          const ci = esc(c.index != null ? c.index : 0);
+          const cName = esc(c.name);
           if (c.type === "3") {
-            const opts = (c.options||[]).map(o => `<option value="${o.value}">${o.name}</option>`).join("");
-            bodyHtml += `<div class="collapse-row"><label><span class="req">*</span>${c.name}</label><select data-arr-signal="${sig}" data-arr-index="${ci}">${opts}</select></div>`;
+            const opts = (c.options||[]).map(o => `<option value="${esc(o.value)}">${esc(o.name)}</option>`).join("");
+            bodyHtml += `<div class="collapse-row"><label><span class="req">*</span>${cName}</label><select data-arr-signal="${sig}" data-arr-index="${ci}">${opts}</select></div>`;
           } else if (c.type === "5") {
             const timeTypeAttr = c.code === "start_time" ? 'data-time-type="start"' : c.code === "end_time" ? 'data-time-type="end"' : "";
             const groupAttr = collapseGroup ? `data-time-group="${collapseGroup}"` : "";
-            bodyHtml += `<div class="collapse-row"><label><span class="req">*</span>${c.name}</label><input type="text" class="time-input" data-arr-signal="${sig}" data-arr-index="${ci}" data-arr-fmt="time" ${timeTypeAttr} ${groupAttr} readonly></div>`;
+            bodyHtml += `<div class="collapse-row"><label><span class="req">*</span>${cName}</label><input type="text" class="time-input" data-arr-signal="${sig}" data-arr-index="${ci}" data-arr-fmt="time" ${timeTypeAttr} ${groupAttr} readonly></div>`;
           } else if (c.type === "1") {
-            const mn = c.min||"0", mx = c.max||"99999", cStep = c.step||1;
-            bodyHtml += `<div class="collapse-row"><label><span class="req">*</span>${c.name}</label><input type="number" data-arr-signal="${sig}" data-arr-index="${ci}" data-step="${cStep}" min="${mn}" max="${mx}" step="${cStep}" placeholder="[${mn}, ${mx}]"></div>`;
+            const mn = esc(c.min||"0"), mx = esc(c.max||"99999"), cStep = esc(c.step||1);
+            bodyHtml += `<div class="collapse-row"><label><span class="req">*</span>${cName}</label><input type="number" data-arr-signal="${sig}" data-arr-index="${ci}" data-step="${cStep}" min="${mn}" max="${mx}" step="${cStep}" placeholder="[${mn}, ${mx}]"></div>`;
           }
         }
         // "是否应用" from FLAG_ENABLE_CYCLE, not from array
-        switchHtml = `<span class="collapse-sw-label">${_t(this._hass, 'apply')}</span><label class="toggle"><input type="checkbox" data-enable-signal="${field.code}" data-collapse-switch="${field.code}"><span class="slider"></span></label>`;
+        switchHtml = `<span class="collapse-sw-label">${esc(_t(this._hass, 'apply'))}</span><label class="toggle"><input type="checkbox" data-enable-signal="${fCode}" data-collapse-switch="${fCode}"><span class="slider"></span></label>`;
         const collapseGroupAttr = collapseGroup ? `data-time-group="${collapseGroup}"` : "";
-        html += `<div class="${cls}" ${la} data-signal="${sig}" data-collapse="${field.code}" ${collapseGroupAttr}><div class="collapse-card"><div class="collapse-header"><span class="collapse-arrow" data-arrow="${field.code}" data-toggle="${field.code}">▶</span><span class="collapse-title" data-toggle="${field.code}">${field.name}</span>${switchHtml}</div><div class="collapse-body" data-body="${field.code}">${bodyHtml}</div></div></div>`;
+        html += `<div class="${cls}" ${la} data-signal="${sig}" data-collapse="${fCode}" ${collapseGroupAttr}><div class="collapse-card"><div class="collapse-header"><span class="collapse-arrow" data-arrow="${fCode}" data-toggle="${fCode}">▶</span><span class="collapse-title" data-toggle="${fCode}">${fName}</span>${switchHtml}</div><div class="collapse-body" data-body="${fCode}">${bodyHtml}</div></div></div>`;
       }
     }
 
