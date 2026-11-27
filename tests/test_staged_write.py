@@ -200,18 +200,20 @@ async def test_flush_creates_notification_on_double_failure():
     entry.runtime_data.staging.stage("CHG_PWR_LMT", 2000)
     entry.runtime_data.staging.stage("WORK_MODE_CMB", "1")
 
-    hass = MagicMock()
+    # spec=[] so a regression to the removed hass.components API fails loudly
+    # instead of a MagicMock silently accepting it.
+    hass = MagicMock(spec=[])
 
     from custom_components.hanchuess import async_flush_staged
-    with patch("asyncio.sleep", new_callable=AsyncMock):
+    with patch("asyncio.sleep", new_callable=AsyncMock), patch(
+        "custom_components.hanchuess.persistent_notification.async_create"
+    ) as create:
         result = await async_flush_staged(hass, entry)
 
     assert result is False
-    hass.components.persistent_notification.async_create.assert_called_once()
-    # Notification title should mention failure
-    call_kwargs = hass.components.persistent_notification.async_create.call_args
-    assert "Write Settings Failed" in call_kwargs.kwargs.get("title", "") or \
-           "Write Settings Failed" in str(call_kwargs)
+    create.assert_called_once()
+    assert create.call_args.args[0] is hass
+    assert "Write Settings Failed" in create.call_args.kwargs["title"]
 
 
 async def test_flush_leaves_buffer_intact_on_double_failure():

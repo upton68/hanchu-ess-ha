@@ -25,6 +25,23 @@ STRATEGY_PATHS = {
 }
 
 
+# Responses from these carry the account access token in "data", so their
+# bodies are masked before logging (users share debug logs in issues).
+_AUTH_PATHS = (
+    "/gateway/identify/auth/token",
+    "/gateway/identify/auth/token/refresh",
+)
+
+
+def _loggable_body(path: str, result, limit: int) -> str:
+    """Return a response body safe to log, with any token masked."""
+    if path in _AUTH_PATHS and isinstance(result, dict):
+        result = {**result, "data": "***" if result.get("data") else result.get("data")}
+    elif path in _AUTH_PATHS:
+        return "<redacted>"
+    return str(result)[:limit]
+
+
 def _mark_token_expired(result: dict | None) -> dict | None:
     """Turn a 401 into the {"_token_expired": True} marker coordinators use."""
     if result and result.get("code") == 401:
@@ -121,14 +138,20 @@ class HanchuessApiClient:
                         url, headers=headers, **request_kwargs
                     ) as response:
                         result = await response.json(content_type=None)
-                        _LOGGER.debug("[HANCHUESS] response: %s status=%s body=%s", path, response.status, str(result)[:500])
+                        _LOGGER.debug(
+                            "[HANCHUESS] response: %s status=%s body=%s",
+                            path, response.status, _loggable_body(path, result, 500),
+                        )
                         if response.status == 401:
                             return {"success": False, "code": 401}
                         if response.status == 200:
                             if result.get("code") == 401:
                                 return {"success": False, "code": 401}
                             return result
-                        _LOGGER.error("[HANCHUESS] unexpected status: %s %s", response.status, str(result)[:200])
+                        _LOGGER.error(
+                            "[HANCHUESS] unexpected status: %s %s",
+                            response.status, _loggable_body(path, result, 200),
+                        )
             except TimeoutError:
                 last_err = "timeout"
                 _LOGGER.warning("[HANCHUESS] Request timeout (attempt %s/%s): %s", attempt, retries, url)

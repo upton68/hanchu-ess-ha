@@ -5,6 +5,7 @@ aiohttp layer with aioresponses. They pin the API client's behaviour and error
 contract.
 """
 import asyncio
+import logging
 
 import aiohttp
 import pytest
@@ -78,6 +79,21 @@ async def test_login_failure_returns_none(hass):
         token = await client.async_login("user", "wrong")
     assert token is None
     assert client.token is None
+
+
+async def test_login_and_refresh_do_not_log_token(hass, caplog):
+    """Debug logs are shared in issues, so the access token must not appear."""
+    caplog.set_level(logging.DEBUG, logger="custom_components.hanchuess.api")
+    client = HanchuessApiClient(hass, BASE_URL)
+    with aioresponses() as m:
+        m.post(LOGIN, payload={"success": True, "data": "secret-login-tok"})
+        m.post(REFRESH, payload={"success": True, "data": "secret-refresh-tok"})
+        await client.async_login("user", "pass")
+        await client.async_refresh_token(force=True)
+    assert client.token == "secret-refresh-tok"
+    assert "secret-login-tok" not in caplog.text
+    assert "secret-refresh-tok" not in caplog.text
+    assert "/gateway/identify/auth/token" in caplog.text  # still logged, just masked
 
 
 # ---------------------------------------------------------------------------
