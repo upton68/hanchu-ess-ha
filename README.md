@@ -136,6 +136,8 @@ data:
 
 Low-level service for sending arbitrary key/value control signals directly to the device — used internally by the integration's entities, but available for advanced or custom automations.
 
+Only administrators can call it. Automations and scripts are unaffected; a non-admin user calling it from the UI or API gets an "Unauthorized" error. The same applies to the energy card's **Set** button, which writes through the same path.
+
 | Field | Required | Description |
 |---|---|---|
 | `sn` | Yes | Inverter serial number. |

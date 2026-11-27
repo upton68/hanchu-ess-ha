@@ -210,4 +210,10 @@ async def test_device_control_service_registered_with_optional_response():
         if call_args.args[0] == DOMAIN and call_args.args[1] == SERVICE_DEVICE_CONTROL
     ]
     assert len(device_control_calls) == 1
-    assert device_control_calls[0].kwargs.get("supports_response") == SupportsResponse.OPTIONAL
+    # Registered through async_register_admin_service, which passes the
+    # schema and supports_response positionally.
+    call_args = device_control_calls[0]
+    assert SupportsResponse.OPTIONAL in (
+        call_args.kwargs.get("supports_response"),
+        *call_args.args[4:],
+    )
