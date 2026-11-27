@@ -12,6 +12,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 import homeassistant.helpers.device_registry as dr
 import homeassistant.helpers.entity_registry as er
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers.service import async_register_admin_service
 from .const import (
     DOMAIN,
     PLATFORMS,
@@ -370,7 +371,11 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     async def handle_device_control(call: ServiceCall):
         return await async_device_control_service(hass, call)
 
-    hass.services.async_register(
+    # Admin-only: forwards caller-chosen keys and values straight to the
+    # inverter's iotSet. Automations and scripts run without a user and
+    # are unaffected.
+    async_register_admin_service(
+        hass,
         DOMAIN,
         SERVICE_DEVICE_CONTROL,
         handle_device_control,
@@ -489,6 +494,7 @@ async def ws_iot_get(hass, connection, msg):
     vol.Required("dev_type"): str,
     vol.Required("value"): dict,
 })
+@websocket_api.require_admin
 @websocket_api.async_response
 async def ws_iot_set(hass, connection, msg):
     inverter_serial_number = msg["sn"]

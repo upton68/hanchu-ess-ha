@@ -36,6 +36,7 @@ const HANCHUESS_I18N = {
     submitting: "Submitting...",
     submit_success: "Set successfully",
     submit_fail: "Set failed: ",
+    admin_only: "Only administrators can change these settings. Use the Hanchuess settings entities instead.",
     no_change: "No changes",
     unknown_error: "Unknown error",
     duration_range: "Duration must be 1~1440 min",
@@ -83,6 +84,7 @@ const HANCHUESS_I18N = {
     submitting: "提交中...",
     submit_success: "设定成功",
     submit_fail: "设定失败: ",
+    admin_only: "仅管理员可以修改这些设置。请改用 Hanchuess 设置实体。",
     no_change: "没有修改",
     unknown_error: "未知错误",
     duration_range: "时长需在 1~1440 分钟之间",
@@ -479,6 +481,7 @@ class HanchuessEnergyCard extends HTMLElement {
             <button class="btn btn-submit" id="submit_btn">${_t(this._hass, 'submit')}</button>
           </div>
         </div>
+        <div class="status" id="admin_note" style="display:none">${esc(_t(this._hass, 'admin_only'))}</div>
 
         <div class="field">
           <label>${_t(this._hass, 'work_mode')}</label>
@@ -612,7 +615,12 @@ class HanchuessEnergyCard extends HTMLElement {
     const submitBtn = this.shadowRoot.getElementById("submit_btn");
     const loadBtn = this.shadowRoot.getElementById("load_btn");
     if (offlineBanner) offlineBanner.style.display = isOnline ? "none" : "block";
-    if (submitBtn) submitBtn.disabled = !isOnline;
+    // Writing settings (hanchuess/iot_set) is admin-only on the server, so
+    // say so up front rather than letting Set fail with "Unauthorized".
+    const isAdmin = this._isAdmin();
+    const adminNote = this.shadowRoot.getElementById("admin_note");
+    if (adminNote) adminNote.style.display = isAdmin ? "none" : "block";
+    if (submitBtn) submitBtn.disabled = !isOnline || !isAdmin;
     if (loadBtn) loadBtn.disabled = !isOnline;
 
     const quickConfirm = this.shadowRoot.getElementById("quick_confirm");
@@ -1315,9 +1323,21 @@ class HanchuessEnergyCard extends HTMLElement {
     return hadOverlap;
   }
 
+  // hass.user is always set in the frontend; if it isn't, leave the button
+  // enabled and let the server decide.
+  _isAdmin() {
+    return !this._hass || !this._hass.user || this._hass.user.is_admin === true;
+  }
+
   async _submit() {
     const submitBtn = this.shadowRoot.getElementById("submit_btn");
     const statusMsg = this.shadowRoot.getElementById("status_msg");
+
+    if (!this._isAdmin()) {
+      statusMsg.textContent = _t(this._hass, 'admin_only');
+      statusMsg.className = "status error";
+      return;
+    }
 
     const state = this._hass.states[this._config.entity];
     if (!state) {
@@ -1535,7 +1555,7 @@ class HanchuessEnergyCard extends HTMLElement {
       }
 
     } finally {
-      submitBtn.disabled = false;
+      submitBtn.disabled = !this._isAdmin();
       setTimeout(() => { statusMsg.textContent = ""; }, 3000);
     }
   }

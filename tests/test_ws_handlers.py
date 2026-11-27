@@ -8,6 +8,8 @@ required.
 """
 from __future__ import annotations
 
+import inspect
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,10 +19,10 @@ pytest.importorskip("homeassistant")
 from custom_components.hanchuess import ws_iot_get, ws_iot_set
 from custom_components.hanchuess.staging import SettingsStagingBuffer
 
-# async_response wraps the handler for background scheduling; __wrapped__ is
-# the original coroutine function, preserved by functools.wraps.
-_ws_iot_get = ws_iot_get.__wrapped__
-_ws_iot_set = ws_iot_set.__wrapped__
+# async_response (and require_admin on iot_set) wrap the handler; unwrap
+# follows __wrapped__, preserved by functools.wraps, to the coroutine function.
+_ws_iot_get = inspect.unwrap(ws_iot_get)
+_ws_iot_set = inspect.unwrap(ws_iot_set)
 
 
 def _make_entry(sn="SN1", staging=None):
