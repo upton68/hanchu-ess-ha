@@ -10,6 +10,26 @@ later versions are tracked here going forward.
 
 ## [Unreleased]
 
+## [2.12.2] - 2026-11-27
+
+Changes requested in the review for inclusion in the Home Assistant
+Marketplace (hacs/default#14998).
+
+### Security
+- The Hanchu account **access token no longer appears in debug logs**.
+  Responses from the login and token-refresh endpoints were logged in
+  full, so sharing a debug log in an issue also shared a working token.
+  The token is now shown as `***`.
+- The **energy card escapes all values it displays from Device Status
+  attributes** (device name, work mode labels, and the names, options and
+  values of the energy settings fields), so text containing HTML is shown
+  as text rather than added to the dashboard.
+
+### Fixed
+- The **"Write Settings failed" notification** now appears when a write
+  fails twice. It used a Home Assistant API that no longer exists, so the
+  error was swallowed and no notification was shown.
+
 ## [2.12.1] - 2026-11-26
 
 Tested by the reporter on 2.11.2-beta.1 (four 3.2 kWh packs with a LuxPower
@@ -716,7 +736,8 @@ act on it straight away must now call `hanchuess.write_settings` after the write
 - Initial fork of the original integration with read-only battery, grid, PV, and
   load sensors and the custom Lovelace card.
 
-[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.12.1...HEAD
+[Unreleased]: https://github.com/upton68/hanchu-ess-ha/compare/v2.12.2...HEAD
+[2.12.2]: https://github.com/upton68/hanchu-ess-ha/compare/v2.12.1...v2.12.2
 [2.12.1]: https://github.com/upton68/hanchu-ess-ha/compare/v2.12.0...v2.12.1
 [2.12.0]: https://github.com/upton68/hanchu-ess-ha/compare/v2.11.1...v2.12.0
 [2.11.1]: https://github.com/upton68/hanchu-ess-ha/compare/v2.11.0...v2.11.1
